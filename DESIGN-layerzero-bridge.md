@@ -1,8 +1,8 @@
-# DESIGN: LayerZero Oracle Value Bridge
+# DESIGN: LayerZero State Relay Bridge
 
 ## 1. Overview
 
-A minimal cross-chain oracle bridging system that uses **LayerZero V2** to push arbitrary oracle values (encoded as `bytes`) from a source EVM chain to one or more destination EVM chains. The primary use case is bridging the **ynETHx exchange rate** from Ethereum L1 to Arbitrum, but the design is generalized for any `bytes`-encodable value (numbers, arrays, structs).
+A minimal cross-chain state relay system that uses **LayerZero V2** to push arbitrary state values (encoded as `bytes`) from a source EVM chain to one or more destination EVM chains. The primary use case is bridging the **ynETHx exchange rate** from Ethereum L1 to Arbitrum, but the design is generalized for any `bytes`-encodable value (numbers, arrays, structs).
 
 The system is designed around three principles:
 1. **Simplicity** -- minimal contracts, minimal moving parts
@@ -21,13 +21,13 @@ The system is designed around three principles:
  │         │                    │              │                                  │
  │         ▼                    │              │                                  │
  │  ┌─────────────────┐        │   LayerZero  │  ┌──────────────────────┐        │
- │  │  OracleSender   │────────┼──────────────┼─▶│   OracleReceiver     │        │
+ │  │  StateSender   │────────┼──────────────┼─▶│   StateReceiver     │        │
  │  │  (OApp)         │        │   V2 Message │  │   (OApp)             │        │
  │  └─────────────────┘        │              │  └──────────┬───────────┘        │
  │                              │              │             │                    │
  │                              │              │             ▼                    │
  │                              │              │  ┌──────────────────────┐        │
- │                              │              │  │  OracleStore         │        │
+ │                              │              │  │  StateStore         │        │
  │                              │              │  │  (key => value)      │        │
  │                              │              │  └──────────┬───────────┘        │
  │                              │              │             │                    │
@@ -43,9 +43,9 @@ The system is designed around three principles:
 
 | Contract | Chain | Responsibility |
 |---|---|---|
-| **OracleSender** | Source | Encodes oracle values and sends them via LayerZero V2 |
-| **OracleReceiver** | Destination | Receives LayerZero messages and writes to OracleStore |
-| **OracleStore** | Destination | Key-value store for bridged oracle values with timestamps |
+| **StateSender** | Source | Encodes state values and sends them via LayerZero V2 |
+| **StateReceiver** | Destination | Receives LayerZero messages and writes to StateStore |
+| **StateStore** | Destination | Key-value store for bridged state values with timestamps |
 | **RateAdapter** | Destination | Thin adapter presenting stored values to consumers (e.g. Curve pools) |
 
 ---
@@ -54,7 +54,7 @@ The system is designed around three principles:
 
 ### 3.1 Message Format
 
-All oracle updates are encoded as a single message:
+All state updates are encoded as a single message:
 
 ```solidity
 bytes memory message = abi.encode(key, value, srcTimestamp);
@@ -62,13 +62,13 @@ bytes memory message = abi.encode(key, value, srcTimestamp);
 
 | Field | Type | Description |
 |---|---|---|
-| `key` | `bytes32` | Identifier for the oracle value (e.g. `keccak256("ynETHx/ETH")`) |
-| `value` | `bytes` | The oracle value, abi-encoded (e.g. `abi.encode(uint256(rate))`) |
+| `key` | `bytes32` | Identifier for the state value (e.g. `keccak256("ynETHx/ETH")`) |
+| `value` | `bytes` | The state value, abi-encoded (e.g. `abi.encode(uint256(rate))`) |
 | `srcTimestamp` | `uint64` | Source chain timestamp at time of read |
 
-This is intentionally flat. No message type enum, no versioning overhead. One message = one oracle update.
+This is intentionally flat. No message type enum, no versioning overhead. One message = one state update.
 
-### 3.2 OracleSender
+### 3.2 StateSender
 
 Inherits from LayerZero V2's `OApp`. Lives on the source chain.
 
@@ -79,20 +79,20 @@ pragma solidity ^0.8.20;
 import { OApp, MessagingFee, Origin } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import { OptionsBuilder } from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
-contract OracleSender is OApp {
+contract StateSender is OApp {
     using OptionsBuilder for bytes;
 
     uint128 public dstGasLimit = 100_000;
 
-    event OracleSent(bytes32 indexed key, bytes value, uint32 dstEid);
+    event StateSent(bytes32 indexed key, bytes value, uint32 dstEid);
 
     constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {}
 
-    /// @notice Push an oracle value to a destination chain.
+    /// @notice Push an state value to a destination chain.
     /// @param dstEid   LayerZero endpoint ID of destination chain.
-    /// @param key      Oracle key identifier.
-    /// @param value    ABI-encoded oracle value.
-    function sendOracleValue(
+    /// @param key      State Key identifier.
+    /// @param value    ABI-encoded state value.
+    function sendStateValue(
         uint32 dstEid,
         bytes32 key,
         bytes calldata value
@@ -103,10 +103,10 @@ contract OracleSender is OApp {
 
         _lzSend(dstEid, message, options, MessagingFee(msg.value, 0), payable(msg.sender));
 
-        emit OracleSent(key, value, dstEid);
+        emit StateSent(key, value, dstEid);
     }
 
-    /// @notice Quote the fee for sending an oracle value.
+    /// @notice Quote the fee for sending an state value.
     function quoteSend(
         uint32 dstEid,
         bytes32 key,
@@ -129,19 +129,19 @@ contract OracleSender is OApp {
     function _lzReceive(
         Origin calldata, bytes32, bytes calldata, address, bytes calldata
     ) internal override {
-        revert("OracleSender: receive not supported");
+        revert("StateSender: receive not supported");
     }
 }
 ```
 
 **Key decisions:**
-- `sendOracleValue` is **permissionless** -- any EOA or keeper can call it and pay the gas. Access control on *what* gets sent is handled by the caller reading on-chain values.
+- `sendStateValue` is **permissionless** -- any EOA or keeper can call it and pay the gas. Access control on *what* gets sent is handled by the caller reading on-chain values.
 - Gas limit is configurable per-contract (not per-key) to keep it simple. 100k gas is ample for a SSTORE on the receiver side.
 - No batching for now. Sending one key at a time keeps the code trivial. Batching can be added later if needed.
 
-### 3.3 OracleReceiver
+### 3.3 StateReceiver
 
-Inherits from LayerZero V2's `OApp`. Lives on the destination chain. Writes received values to the `OracleStore`.
+Inherits from LayerZero V2's `OApp`. Lives on the destination chain. Writes received values to the `StateStore`.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -149,26 +149,26 @@ pragma solidity ^0.8.20;
 
 import { OApp, Origin, MessagingFee } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
-interface IOracleStore {
+interface IStateStore {
     function updateValue(bytes32 key, bytes calldata value, uint64 srcTimestamp) external;
 }
 
-contract OracleReceiver is OApp {
+contract StateReceiver is OApp {
 
-    IOracleStore public oracleStore;
+    IStateStore public stateStore;
 
-    event OracleReceived(bytes32 indexed key, uint32 srcEid);
+    event StateReceived(bytes32 indexed key, uint32 srcEid);
 
     constructor(
         address _endpoint,
         address _owner,
-        address _oracleStore
+        address _stateStore
     ) OApp(_endpoint, _owner) {
-        oracleStore = IOracleStore(_oracleStore);
+        stateStore = IStateStore(_stateStore);
     }
 
-    function setOracleStore(address _oracleStore) external onlyOwner {
-        oracleStore = IOracleStore(_oracleStore);
+    function setStateStore(address _stateStore) external onlyOwner {
+        stateStore = IStateStore(_stateStore);
     }
 
     function _lzReceive(
@@ -181,21 +181,21 @@ contract OracleReceiver is OApp {
         (bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(_message, (bytes32, bytes, uint64));
 
-        oracleStore.updateValue(key, value, srcTimestamp);
+        stateStore.updateValue(key, value, srcTimestamp);
 
-        emit OracleReceived(key, _origin.srcEid);
+        emit StateReceived(key, _origin.srcEid);
     }
 }
 ```
 
 **Key decisions:**
 - The receiver does not interpret the value. It just passes through `bytes` to the store.
-- The peer validation (ensuring the message comes from the trusted `OracleSender`) is handled by OApp's built-in `_getPeerOrRevert` check in `lzReceive()`.
-- OracleStore is a separate contract so it can be shared by multiple receivers (future: when other bridge adapters are added).
+- The peer validation (ensuring the message comes from the trusted `StateSender`) is handled by OApp's built-in `_getPeerOrRevert` check in `lzReceive()`.
+- StateStore is a separate contract so it can be shared by multiple receivers (future: when other bridge adapters are added).
 
-### 3.4 OracleStore
+### 3.4 StateStore
 
-The central registry on the destination chain. Stores oracle values and enforces access control on who can write.
+The central registry on the destination chain. Stores state values and enforces access control on who can write.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -203,15 +203,15 @@ pragma solidity ^0.8.20;
 
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
-contract OracleStore is Ownable {
+contract StateStore is Ownable {
 
-    struct OracleValue {
+    struct StateValue {
         bytes value;          // Raw encoded value
         uint64 srcTimestamp;  // When the value was read on source chain
         uint64 updatedAt;     // When the value was written on this chain
     }
 
-    mapping(bytes32 => OracleValue) public values;
+    mapping(bytes32 => StateValue) public values;
     mapping(address => bool) public writers;
 
     event ValueUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
@@ -227,7 +227,7 @@ contract OracleStore is Ownable {
         _;
     }
 
-    /// @notice Update an oracle value. Only callable by authorized writers.
+    /// @notice Update an state value. Only callable by authorized writers.
     /// @dev Silently rejects values older than what's already stored (no revert to avoid
     ///      blocking LayerZero message queue if messages arrive out of order).
     function updateValue(
@@ -237,7 +237,7 @@ contract OracleStore is Ownable {
     ) external onlyWriter {
         if (srcTimestamp <= values[key].srcTimestamp) return; // stale, skip
 
-        values[key] = OracleValue({
+        values[key] = StateValue({
             value: value,
             srcTimestamp: srcTimestamp,
             updatedAt: uint64(block.timestamp)
@@ -246,15 +246,10 @@ contract OracleStore is Ownable {
         emit ValueUpdated(key, srcTimestamp, uint64(block.timestamp));
     }
 
-    /// @notice Read a stored oracle value.
+    /// @notice Read a stored state value.
     function getValue(bytes32 key) external view returns (bytes memory value, uint64 srcTimestamp, uint64 updatedAt) {
-        OracleValue storage v = values[key];
+        StateValue storage v = values[key];
         return (v.value, v.srcTimestamp, v.updatedAt);
-    }
-
-    /// @notice Convenience: read value decoded as uint256.
-    function getValueAsUint256(bytes32 key) external view returns (uint256) {
-        return abi.decode(values[key].value, (uint256));
     }
 
     function setWriter(address writer, bool allowed) external onlyOwner {
@@ -266,35 +261,33 @@ contract OracleStore is Ownable {
 
 **Key decisions:**
 - **Staleness protection**: If a message arrives out of order, it's silently ignored (no revert). This is critical because reverting in `_lzReceive` would block the LayerZero message channel.
-- **Writer pattern**: Only authorized addresses (the OracleReceiver, or future bridge receivers) can write. This is the extensibility point for adding other bridges later.
-- `getValueAsUint256` is a convenience for the common case (rates). Consumers that need other types decode `bytes` themselves.
+- **Writer pattern**: Only authorized addresses (the StateReceiver, or future bridge receivers) can write. This is the extensibility point for adding other bridges later.
 
 ### 3.5 RateAdapter (Example: Curve Pool Consumer)
 
-A thin adapter that presents a stored oracle value in the interface expected by the consumer protocol.
+A thin adapter that presents a stored state value in the interface expected by the consumer protocol.
 
 ```solidity
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-interface IOracleStore {
-    function getValueAsUint256(bytes32 key) external view returns (uint256);
+interface IStateStore {
     function getValue(bytes32 key) external view returns (bytes memory, uint64, uint64);
 }
 
-/// @notice Adapter that exposes a bridged oracle value as a rate for Curve pools
+/// @notice Adapter that exposes a bridged state value as a rate for Curve pools
 ///         or other DeFi consumers. Implements a simple getRate() interface.
 contract RateAdapter {
 
-    IOracleStore public immutable oracleStore;
-    bytes32 public immutable oracleKey;
+    IStateStore public immutable stateStore;
+    bytes32 public immutable stateKey;
     uint64 public immutable maxStaleness; // seconds
 
     error StaleRate();
 
-    constructor(address _oracleStore, bytes32 _oracleKey, uint64 _maxStaleness) {
-        oracleStore = IOracleStore(_oracleStore);
-        oracleKey = _oracleKey;
+    constructor(address _stateStore, bytes32 _stateKey, uint64 _maxStaleness) {
+        stateStore = IStateStore(_stateStore);
+        stateKey = _stateKey;
         maxStaleness = _maxStaleness;
     }
 
@@ -302,9 +295,9 @@ contract RateAdapter {
     /// @dev Curve StableSwap-NG pools call this via raw_call with selector 0x679aefce.
     ///      Also compatible with Balancer IRateProvider.
     function getRate() external view returns (uint256) {
-        (, uint64 srcTimestamp, ) = oracleStore.getValue(oracleKey);
+        (bytes memory value, uint64 srcTimestamp, ) = stateStore.getValue(stateKey);
         if (block.timestamp - srcTimestamp > maxStaleness) revert StaleRate();
-        return oracleStore.getValueAsUint256(oracleKey);
+        return abi.decode(value, (uint256));
     }
 }
 ```
@@ -312,7 +305,7 @@ contract RateAdapter {
 **Key decisions:**
 - `getRate()` (selector `0x679aefce`) is the de-facto standard used by Curve StableSwap-NG (`_stored_rates` calls external oracles via `raw_call` with packed method_id + address) and Balancer (`IRateProvider`).
 - **Staleness check**: The adapter reverts if the rate is older than `maxStaleness`. For a daily-pushed rate, set this to ~26 hours (93600 seconds) to allow for keeper timing variance.
-- Immutable fields -- each adapter is deployed for a specific oracle key. No admin surface.
+- Immutable fields -- each adapter is deployed for a specific state key. No admin surface.
 
 ---
 
@@ -320,13 +313,13 @@ contract RateAdapter {
 
 ### Option A: Simple Keeper (MVP)
 
-An off-chain keeper (bot or multisig) calls `OracleSender.sendOracleValue()` daily:
+An off-chain keeper (bot or multisig) calls `StateSender.sendStateValue()` daily:
 
 ```
 1. Read ynETHx rate on L1: ynETHx.convertToAssets(1e18)
 2. Encode: abi.encode(rate)
-3. Quote: OracleSender.quoteSend(dstEid, key, encodedRate)
-4. Send:  OracleSender.sendOracleValue{value: fee}(dstEid, key, encodedRate)
+3. Quote: StateSender.quoteSend(dstEid, key, encodedRate)
+4. Send:  StateSender.sendStateValue{value: fee}(dstEid, key, encodedRate)
 ```
 
 **Pros**: Dead simple, easy to monitor.
@@ -337,14 +330,14 @@ An off-chain keeper (bot or multisig) calls `OracleSender.sendOracleValue()` dai
 Use [Chainlink Automation](https://automation.chain.link/) or [Gelato](https://www.gelato.network/) to trigger the push:
 
 - **Trigger**: Time-based (every 24h) or deviation-based (>0.1% rate change)
-- **Execution**: Calls `sendOracleValue` on the OracleSender
+- **Execution**: Calls `sendStateValue` on the StateSender
 - **Gas funding**: Automation service pays L1 gas; LayerZero fee comes from a pre-funded contract or is forwarded
 
-A thin `AutomatedOraclePusher` contract can wrap the logic:
+A thin `AutomatedStatePusher` contract can wrap the logic:
 
 ```solidity
-contract AutomatedOraclePusher {
-    OracleSender public immutable sender;
+contract AutomatedStatePusher {
+    StateSender public immutable sender;
     address public immutable rateSource; // e.g. ynETHx vault
     bytes32 public immutable key;
     uint32 public immutable dstEid;
@@ -353,7 +346,7 @@ contract AutomatedOraclePusher {
         uint256 rate = IERC4626(rateSource).convertToAssets(1e18);
         bytes memory value = abi.encode(rate);
         uint256 fee = sender.quoteSend(dstEid, key, value);
-        sender.sendOracleValue{value: fee}(dstEid, key, value);
+        sender.sendStateValue{value: fee}(dstEid, key, value);
     }
 
     receive() external payable {} // Accept ETH for gas funding
@@ -366,12 +359,12 @@ contract AutomatedOraclePusher {
 
 ## 5. Extensibility: Plugging in Other Bridges
 
-The `OracleStore` writer pattern enables adding bridges beyond LayerZero without modifying any existing contract:
+The `StateStore` writer pattern enables adding bridges beyond LayerZero without modifying any existing contract:
 
 ```
                                     ┌─────────────────┐
- LayerZero  ──▶  OracleReceiver ──▶│                  │
-                                    │   OracleStore    │◀── RateAdapter (consumers)
+ LayerZero  ──▶  StateReceiver ──▶│                  │
+                                    │   StateStore    │◀── RateAdapter (consumers)
  Axelar     ──▶  AxelarReceiver ──▶│   (writers[])    │
                                     │                  │
  Hyperlane  ──▶  HyperReceiver  ──▶│                  │
@@ -380,12 +373,12 @@ The `OracleStore` writer pattern enables adding bridges beyond LayerZero without
 
 To add a new bridge:
 1. Deploy a new receiver contract that implements the bridge's receive interface
-2. Have it call `oracleStore.updateValue(key, value, srcTimestamp)`
-3. Call `oracleStore.setWriter(newReceiver, true)`
+2. Have it call `stateStore.updateValue(key, value, srcTimestamp)`
+3. Call `stateStore.setWriter(newReceiver, true)`
 
-No changes to OracleStore, RateAdapter, or the LayerZero receiver.
+No changes to StateStore, RateAdapter, or the LayerZero receiver.
 
-Inspired by [Centrifuge's MultiAdapter pattern](https://github.com/centrifuge/protocol/blob/main/src/core/messaging/MultiAdapter.sol) but drastically simplified: we skip the quorum/threshold/voting mechanism since we don't need multi-bridge consensus for oracle values (a single trusted bridge path is sufficient for rate data).
+Inspired by [Centrifuge's MultiAdapter pattern](https://github.com/centrifuge/protocol/blob/main/src/core/messaging/MultiAdapter.sol) but drastically simplified: we skip the quorum/threshold/voting mechanism since we don't need multi-bridge consensus for state values (a single trusted bridge path is sufficient for rate data).
 
 ---
 
@@ -426,7 +419,7 @@ Our design is intentionally simpler because we don't need Centrifuge's full mult
 
 | Concept | Usage |
 |---|---|
-| **OApp** | Both OracleSender and OracleReceiver inherit from `OApp` which combines `OAppSender` + `OAppReceiver` + `OAppCore` |
+| **OApp** | Both StateSender and StateReceiver inherit from `OApp` which combines `OAppSender` + `OAppReceiver` + `OAppCore` |
 | **Peer Configuration** | `setPeer(eid, bytes32(uint256(uint160(addr))))` -- must be set on both sender and receiver |
 | **`_lzSend`** | Internal function on OAppSender: packs `MessagingParams`, pays fee, calls `endpoint.send()` |
 | **`_lzReceive`** | Internal override on OAppReceiver: called by endpoint after DVN verification |
@@ -444,12 +437,12 @@ Our design is intentionally simpler because we don't need Centrifuge's full mult
 ### Deployment Sequence
 
 ```
-1. Deploy OracleStore on Arbitrum
-2. Deploy OracleReceiver on Arbitrum (pass endpoint + store address)
-3. Deploy OracleSender on Ethereum (pass endpoint)
-4. Call oracleStore.setWriter(oracleReceiver, true) on Arbitrum
-5. Call oracleSender.setPeer(30110, bytes32(uint256(uint160(oracleReceiver)))) on Ethereum
-6. Call oracleReceiver.setPeer(30101, bytes32(uint256(uint160(oracleSender)))) on Arbitrum
+1. Deploy StateStore on Arbitrum
+2. Deploy StateReceiver on Arbitrum (pass endpoint + store address)
+3. Deploy StateSender on Ethereum (pass endpoint)
+4. Call stateStore.setWriter(stateReceiver, true) on Arbitrum
+5. Call stateSender.setPeer(30110, bytes32(uint256(uint160(stateReceiver)))) on Ethereum
+6. Call stateReceiver.setPeer(30101, bytes32(uint256(uint160(stateSender)))) on Arbitrum
 7. Deploy RateAdapter on Arbitrum (pass store + key + maxStaleness)
 8. Configure Curve pool to use RateAdapter address
 ```
@@ -466,7 +459,7 @@ ynETHx is an ERC-4626 vault. The exchange rate is:
 uint256 rate = ynETHx.convertToAssets(1e18); // returns 18-decimal rate
 ```
 
-### Oracle Key
+### State Key
 
 ```solidity
 bytes32 constant YNETHX_ETH_RATE = keccak256("ynETHx/ETH");
@@ -505,11 +498,11 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 | Concern | Mitigation |
 |---|---|
 | **Unauthorized sender** | OApp peer validation: only the registered peer on the source chain can send messages. `_getPeerOrRevert` in `lzReceive()` enforces this. |
-| **Stale data** | RateAdapter reverts on stale data. OracleStore silently skips out-of-order messages. |
-| **Replay / re-entrancy** | LayerZero V2 handles nonce management. OracleStore update is a simple SSTORE, no external calls. |
-| **Malicious oracle value** | The sender is permissionless but reads from immutable on-chain sources (e.g. ERC-4626 vault). The value is trustworthy if the source contract is trustworthy. |
+| **Stale data** | RateAdapter reverts on stale data. StateStore silently skips out-of-order messages. |
+| **Replay / re-entrancy** | LayerZero V2 handles nonce management. StateStore update is a simple SSTORE, no external calls. |
+| **Malicious state value** | The sender is permissionless but reads from immutable on-chain sources (e.g. ERC-4626 vault). The value is trustworthy if the source contract is trustworthy. |
 | **LayerZero liveness** | If LayerZero is down, rates go stale and the RateAdapter reverts, preventing trades at bad prices. This is the correct behavior. |
-| **Message ordering** | We don't require ordered delivery. The `srcTimestamp` check in OracleStore ensures only newer values are accepted regardless of arrival order. |
+| **Message ordering** | We don't require ordered delivery. The `srcTimestamp` check in StateStore ensures only newer values are accepted regardless of arrival order. |
 | **Store writer compromise** | Owner can revoke writers. In the worst case, the staleness check in RateAdapter limits the impact window. |
 
 ---
@@ -518,8 +511,8 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 
 | Operation | Estimated Gas | Notes |
 |---|---|---|
-| `OracleSender.sendOracleValue` (L1) | ~80,000 + LZ fee | LZ fee varies by DVN config |
-| `OracleReceiver._lzReceive` (L2) | ~60,000 | abi.decode + SSTORE |
+| `StateSender.sendStateValue` (L1) | ~80,000 + LZ fee | LZ fee varies by DVN config |
+| `StateReceiver._lzReceive` (L2) | ~60,000 | abi.decode + SSTORE |
 | `RateAdapter.getRate` (L2 view) | ~5,000 | Two SLOADs |
 
 Destination gas limit of 100,000 provides comfortable headroom.
@@ -530,15 +523,15 @@ Destination gas limit of 100,000 provides comfortable headroom.
 
 ```
 src/
-├── OracleSender.sol          # Source chain: sends oracle values via LayerZero
-├── OracleReceiver.sol        # Dest chain: receives LZ messages, writes to store
-├── OracleStore.sol           # Dest chain: key-value store for oracle values
+├── StateSender.sol          # Source chain: sends state values via LayerZero
+├── StateReceiver.sol        # Dest chain: receives LZ messages, writes to store
+├── StateStore.sol           # Dest chain: key-value store for state values
 ├── adapters/
 │   └── RateAdapter.sol       # Dest chain: presents value to Curve/Balancer
 ├── automation/
-│   └── AutomatedOraclePusher.sol  # Optional: Gelato/Chainlink Automation wrapper
+│   └── AutomatedStatePusher.sol  # Optional: Gelato/Chainlink Automation wrapper
 └── interfaces/
-    └── IOracleStore.sol      # Interface for OracleStore
+    └── IStateStore.sol      # Interface for StateStore
 ```
 
 ---
@@ -558,9 +551,9 @@ The minimal audit surface is:
 
 | Contract | Lines (est.) | Notes |
 |---|---|---|
-| OracleSender | ~50 | Thin wrapper over OApp._lzSend |
-| OracleReceiver | ~30 | Thin wrapper over OApp._lzReceive |
-| OracleStore | ~60 | Simple SSTORE with timestamp check |
+| StateSender | ~50 | Thin wrapper over OApp._lzSend |
+| StateReceiver | ~30 | Thin wrapper over OApp._lzReceive |
+| StateStore | ~60 | Simple SSTORE with timestamp check |
 | RateAdapter | ~20 | Pure view, no state mutation |
 | **Total** | **~160** | |
 
@@ -572,6 +565,6 @@ The OApp base contracts are already audited by LayerZero. Our custom code is ~16
 
 - **Batch sending**: Send multiple keys in one LZ message to reduce per-message overhead
 - **Multi-destination**: Push from L1 to multiple L2s in a single transaction (LayerZero's "Batch Send" pattern)
-- **Additional bridges**: Deploy Axelar/Hyperlane receivers and add them as OracleStore writers for redundancy
-- **Quorum verification**: If multi-bridge consensus becomes necessary, add a lightweight quorum check in OracleStore (inspired by Centrifuge's MultiAdapter threshold pattern)
-- **Rate smoothing**: On-chain TWAP or bounded rate updates to mitigate oracle manipulation
+- **Additional bridges**: Deploy Axelar/Hyperlane receivers and add them as StateStore writers for redundancy
+- **Quorum verification**: If multi-bridge consensus becomes necessary, add a lightweight quorum check in StateStore (inspired by Centrifuge's MultiAdapter threshold pattern)
+- **Rate smoothing**: On-chain TWAP or bounded rate updates to mitigate state manipulation
