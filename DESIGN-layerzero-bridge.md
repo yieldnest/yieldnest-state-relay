@@ -54,17 +54,15 @@ The system is designed around three principles:
 
 ### 3.1 Key Derivation
 
-State keys are **deterministic hashes** derived from what is being read and (optionally) who is authorized to push it. This eliminates arbitrary key assignment and makes the key self-describing.
-
-#### Permissionless Mode
-
-The key is derived from the source contract and calldata alone:
+State keys are **deterministic hashes** derived from the source contract and calldata:
 
 ```solidity
 key = keccak256(abi.encode(target, callData))
 ```
 
-Any address can push the value for any key. Since the value is always read via `staticcall(target, callData)`, the caller controls *when* but not *what*. There is no spoofing risk because the value is read on-chain at push time.
+The key is not assigned or registered — it is a fingerprint of exactly what on-chain value is being read. Anyone can trigger a push for any key. Since the value is always read via `staticcall(target, callData)`, the caller controls *when* but not *what*. There is no spoofing risk because the value is read on-chain at push time.
+
+Trust is established at the **destination**, not the source. The RateAdapter (or any consumer) is deployed with a specific `stateKey`, which pins it to a specific `(target, callData)` pair. A malicious caller pointing at a different target contract produces a different key that no adapter reads.
 
 **Example:**
 ```solidity
@@ -74,35 +72,12 @@ bytes32 key = keccak256(abi.encode(ynETHx, callData));
 // key deterministically represents "ynETHx.convertToAssets(1e18)"
 ```
 
-**Best for**: Public on-chain values that anyone should be able to relay (vault rates, token prices, total supplies).
-
-#### Permissioned Mode
-
-The key additionally encodes a **role**, namespacing the keyspace by authorization group:
-
-```solidity
-key = keccak256(abi.encode(role, target, callData))
-```
-
-Only addresses holding `role` can push to this key. Different roles produce different keys for the same source, so a `RELAYER_ROLE` and an `ADMIN_ROLE` pushing the same value write to separate keys. Destination adapters pin to a specific key, implicitly trusting the role that produced it.
-
-**Example:**
-```solidity
-bytes32 RELAYER_ROLE = keccak256("RELAYER_ROLE");
-bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (1e18));
-bytes32 key = keccak256(abi.encode(RELAYER_ROLE, ynETHx, callData));
-```
-
-**Best for**: Sensitive values where you want to control who can trigger relays (cross-chain position values, reward amounts). Keepers can be added/removed from the role without changing the key or redeploying destination adapters.
-
-#### Key Properties (Both Modes)
-
 | Property | Benefit |
 |---|---|
 | **Deterministic** | Key is derived, not assigned. No admin call to bind key → source. |
 | **Self-describing** | The key encodes exactly what on-chain value it represents. |
-| **Collision-free** | Different sources, different calldata, or different roles always produce different keys. |
-| **Stable under keeper rotation** | Swapping keeper addresses doesn't change the key (permissioned mode uses role, not address). |
+| **Collision-free** | Different targets or different calldata always produce different keys. |
+| **Trust via target** | The target contract address is the trust boundary. Only a specific contract's return value is relayed for a given key. No access control needed — the source contract itself is the permission. |
 
 ### 3.2 Message Format
 
@@ -122,11 +97,9 @@ This is intentionally flat. No message type enum, no versioning overhead. One me
 
 ### 3.3 StateSender
 
-Inherits from LayerZero V2's `OApp` and OpenZeppelin's `AccessControl`. Lives on the source chain.
+Inherits from LayerZero V2's `OApp`. Lives on the source chain.
 
-The sender is **value-constrained**: values are always read from on-chain sources via `staticcall` — callers never supply the value. Keys are deterministically derived from the source definition (and optionally a role). This eliminates the oracle manipulation vector where anyone could push a fabricated value.
-
-Both permissionless and permissioned relay modes are supported in a single contract.
+The sender is **fully permissionless and value-constrained**. Anyone can trigger a push for any source, but the value is always read via `staticcall` — callers never supply it. The key is derived from `(target, callData)`, so trust is established by the target contract itself, not by access control on the sender.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -134,9 +107,8 @@ pragma solidity ^0.8.20;
 
 import { OApp, MessagingFee, Origin } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import { OptionsBuilder } from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
-import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract StateSender is OApp, AccessControl {
+contract StateSender is OApp {
     using OptionsBuilder for bytes;
 
     uint128 public dstGasLimit = 100_000;
@@ -146,13 +118,9 @@ contract StateSender is OApp, AccessControl {
     error SourceCallFailed();
     error ReceiveNotSupported();
 
-    constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {
-        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
-    }
+    constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {}
 
-    // ─── Key Derivation ────────────────────────────────────────────────
-
-    /// @notice Derive a permissionless key from a source definition.
+    /// @notice Derive the key for a given source definition.
     function deriveKey(
         address target,
         bytes calldata callData
@@ -160,19 +128,8 @@ contract StateSender is OApp, AccessControl {
         return keccak256(abi.encode(target, callData));
     }
 
-    /// @notice Derive a permissioned key from a role + source definition.
-    function deriveKey(
-        bytes32 role,
-        address target,
-        bytes calldata callData
-    ) public pure returns (bytes32) {
-        return keccak256(abi.encode(role, target, callData));
-    }
-
-    // ─── Permissionless Relay ──────────────────────────────────────────
-
-    /// @notice Push a state value to a destination chain (permissionless).
-    ///         Anyone can call this. The value is read on-chain, not caller-supplied.
+    /// @notice Push a state value to a destination chain.
+    ///         Anyone can call this. The value is read on-chain via staticcall, not caller-supplied.
     /// @param dstEid    LayerZero endpoint ID of destination chain.
     /// @param target    Source contract to read from.
     /// @param callData  Full calldata for the staticcall (selector + args).
@@ -186,28 +143,7 @@ contract StateSender is OApp, AccessControl {
         _send(dstEid, key, value);
     }
 
-    // ─── Permissioned Relay ────────────────────────────────────────────
-
-    /// @notice Push a state value to a destination chain (permissioned).
-    ///         Only addresses holding `role` can call this.
-    /// @param dstEid    LayerZero endpoint ID of destination chain.
-    /// @param role      AccessControl role required to push this key.
-    /// @param target    Source contract to read from.
-    /// @param callData  Full calldata for the staticcall (selector + args).
-    function sendState(
-        uint32 dstEid,
-        bytes32 role,
-        address target,
-        bytes calldata callData
-    ) external payable onlyRole(role) {
-        bytes32 key = deriveKey(role, target, callData);
-        bytes memory value = _readSource(target, callData);
-        _send(dstEid, key, value);
-    }
-
-    // ─── Fee Quoting ───────────────────────────────────────────────────
-
-    /// @notice Quote the fee for a permissionless send.
+    /// @notice Quote the fee for sending a state value.
     function quoteSend(
         uint32 dstEid,
         address target,
@@ -218,26 +154,10 @@ contract StateSender is OApp, AccessControl {
         return _quoteFee(dstEid, key, value);
     }
 
-    /// @notice Quote the fee for a permissioned send.
-    function quoteSend(
-        uint32 dstEid,
-        bytes32 role,
-        address target,
-        bytes calldata callData
-    ) external view returns (uint256 nativeFee) {
-        bytes32 key = deriveKey(role, target, callData);
-        bytes memory value = _readSource(target, callData);
-        return _quoteFee(dstEid, key, value);
-    }
-
-    // ─── Admin ─────────────────────────────────────────────────────────
-
     /// @notice Owner can adjust destination gas limit.
     function setDstGasLimit(uint128 _gasLimit) external onlyOwner {
         dstGasLimit = _gasLimit;
     }
-
-    // ─── Internals ─────────────────────────────────────────────────────
 
     function _readSource(address target, bytes calldata callData) internal view returns (bytes memory) {
         (bool ok, bytes memory result) = target.staticcall(callData);
@@ -270,23 +190,13 @@ contract StateSender is OApp, AccessControl {
     ) internal override {
         revert ReceiveNotSupported();
     }
-
-    /// @dev AccessControl + OApp both define supportsInterface.
-    function supportsInterface(bytes4 interfaceId)
-        public view override(AccessControl)
-        returns (bool)
-    {
-        return super.supportsInterface(interfaceId);
-    }
 }
 ```
 
 **Key decisions:**
-- **Value is always read via `staticcall`**, never caller-supplied. Eliminates oracle manipulation regardless of access mode.
-- **Permissionless mode** (`sendState(dstEid, target, callData)`): Anyone can relay any on-chain value. Key = `hash(target, callData)`.
-- **Permissioned mode** (`sendState(dstEid, role, target, callData)`): Only addresses holding `role` can push. Key = `hash(role, target, callData)`. Produces a different key than permissionless mode for the same source, so they never collide.
-- **No admin registration step** -- keys are derived, not configured. The source definition is passed at call time and hashed into the key. No `setStateSource` needed.
-- **Role-based, not address-based** -- keepers are added/removed from roles without changing the key. Destination adapters never need redeployment on keeper rotation.
+- **Value is always read via `staticcall`**, never caller-supplied. The target contract is the trust boundary — no access control needed on the sender.
+- **Fully permissionless** -- anyone can trigger a push for any source. They control *when*, the target contract controls *what*.
+- **No admin registration, no roles, no config** -- keys are derived at call time from `(target, callData)`. Zero admin surface beyond OApp peer configuration.
 - Gas limit is configurable per-contract (not per-key) to keep it simple. 100k gas is ample for a SSTORE on the receiver side.
 - No batching for now. Sending one key at a time keeps the code trivial. Batching can be added later if needed.
 
@@ -467,13 +377,8 @@ contract RateAdapter {
 An off-chain keeper (bot or multisig) calls `StateSender.sendState()` daily. The source definition is passed at call time — the StateSender reads the value on-chain and derives the key. The keeper decides *when* to push, not *what*.
 
 ```
-# Permissionless (e.g. public ynETHx rate)
 1. Quote: StateSender.quoteSend(dstEid, ynETHx, callData)
 2. Send:  StateSender.sendState{value: fee}(dstEid, ynETHx, callData)
-
-# Permissioned (e.g. cross-chain position value)
-1. Quote: StateSender.quoteSend(dstEid, RELAYER_ROLE, vault, callData)
-2. Send:  StateSender.sendState{value: fee}(dstEid, RELAYER_ROLE, vault, callData)
 ```
 
 **Pros**: Dead simple, easy to monitor.
@@ -505,7 +410,7 @@ contract AutomatedStatePusher {
 }
 ```
 
-The pusher stores the source definition (target + callData) so automation services don't need to know it. For permissioned keys, the pusher must hold the required role on the StateSender.
+The pusher stores the source definition (target + callData) so automation services don't need to know it.
 
 **Recommendation**: Start with Option A for launch, migrate to Option B once proven.
 
@@ -566,7 +471,7 @@ Our design is intentionally simpler because we don't need Centrifuge's full mult
 ```
 @layerzerolabs/oapp-evm           # OApp, OAppSender, OAppReceiver, OAppCore
 @layerzerolabs/lz-evm-protocol-v2 # ILayerZeroEndpointV2, MessagingParams, MessagingFee
-@openzeppelin/contracts            # Ownable, AccessControl
+@openzeppelin/contracts            # Ownable
 ```
 
 ### Key LayerZero V2 Concepts Used
@@ -669,15 +574,8 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 |---|---|
 | **Fabricated value injection** | StateSender reads values via `staticcall` -- callers never supply the value. Both permissionless and permissioned modes enforce this. A caller cannot push an arbitrary `bytes` payload. |
 | **Malicious target contract** | In permissionless mode, anyone can pass any `target` address. A malicious contract returning a fake value produces a **different derived key** than the legitimate source. Destination adapters are deployed with the legitimate key and will never read the attacker's key. The StateStore may accumulate garbage keys, but they are never consumed. |
-| **Key collision / spoofing** | Keys are deterministic hashes of `(target, callData)` or `(role, target, callData)`. Different sources, calldata, or roles always produce different keys. Permissioned and permissionless pushes of the same source produce different keys and never collide. |
-| **Source contract manipulation** | The `staticcall` faithfully reads whatever the source returns. If the source contract's return value is manipulable (e.g. via flash loans, oracle manipulation, or reentrancy on the source), the relayed value will reflect that manipulation. **Mitigation**: Use sources that are resistant to atomic manipulation (e.g. ERC-4626 vaults with TWAP-based pricing, not AMM spot prices). For sensitive values, use permissioned mode so only trusted roles can trigger reads at known-safe times. The bounded rate check in Amendment E provides an additional safety net on the destination. |
-
-### Access Control (Permissioned Mode)
-
-| Concern | Mitigation |
-|---|---|
-| **Role compromise** | If an attacker gains a role, they can trigger pushes for that role's keys — but the value is still read via `staticcall`, not caller-supplied. The damage is limited to controlling *when* a value is read (e.g. timing a push during a price manipulation window). Roles can be revoked by `DEFAULT_ADMIN_ROLE`. |
-| **Admin key compromise** | `DEFAULT_ADMIN_ROLE` can grant roles to arbitrary addresses. Standard multisig / timelock governance practices apply. This is no different from any AccessControl-based system. |
+| **Key collision / spoofing** | Keys are deterministic hashes of `(target, callData)`. Different targets or different calldata always produce different keys. No two sources can collide. |
+| **Source contract manipulation** | The `staticcall` faithfully reads whatever the source returns. If the source contract's return value is manipulable (e.g. via flash loans, oracle manipulation, or reentrancy on the source), the relayed value will reflect that manipulation. **Mitigation**: Use sources that are resistant to atomic manipulation (e.g. ERC-4626 vaults with proper accounting, not AMM spot prices). For composed values, use a reader contract that incorporates TWAP or other smoothing. The bounded rate check in Amendment E provides an additional safety net on the destination. |
 
 ### Destination Side
 
@@ -733,13 +631,13 @@ The minimal audit surface is:
 
 | Contract | Lines (est.) | Notes |
 |---|---|---|
-| StateSender | ~100 | OApp + AccessControl, key derivation, staticcall reads, permissionless + permissioned modes |
+| StateSender | ~70 | OApp, key derivation, staticcall reads |
 | StateReceiver | ~30 | Thin wrapper over OApp._lzReceive |
 | StateStore | ~60 | Simple SSTORE with timestamp check |
 | RateAdapter | ~20 | Pure view, no state mutation |
-| **Total** | **~210** | |
+| **Total** | **~180** | |
 
-The OApp and AccessControl base contracts are already audited by LayerZero and OpenZeppelin respectively. Our custom code is ~210 lines of straightforward Solidity.
+The OApp base contracts are already audited by LayerZero. Our custom code is ~180 lines of straightforward Solidity.
 
 ---
 
@@ -842,12 +740,18 @@ The relay should always send **absolute total position value**, not deltas. Rati
 - Absolute values are idempotent -- receiving the same value twice is harmless (StateStore's staleness check handles it)
 - The delta computation happens on the settlement chain where it can be validated against the AccountingModule's APR caps before being applied
 
-State key derivation for the reverse relay (permissioned, since position values are sensitive):
+State key derivation for the reverse relay:
 ```solidity
-bytes32 RELAYER_ROLE = keccak256("RELAYER_ROLE");
-bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (shares));
-bytes32 ARB_POSITION_KEY = keccak256(abi.encode(RELAYER_ROLE, arbVault, callData));
+// Relay the rate from the sidechain vault (fixed calldata, stable key)
+bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (1e18));
+bytes32 ARB_RATE_KEY = keccak256(abi.encode(arbVault, callData));
+
+// Relay the Safe's share balance (fixed calldata, stable key)
+bytes memory balCallData = abi.encodeCall(IERC20.balanceOf, (safe));
+bytes32 ARB_BALANCE_KEY = keccak256(abi.encode(arbVault, balCallData));
 ```
+
+The settlement chain computes `positionValue = rate * balance / 1e18` from two stable-key relays. No dynamic calldata, no reader contracts needed for this case.
 
 The relayed value represents: "The total base-asset-equivalent value of all assets deployed on this sidechain, including accrued yield."
 
@@ -936,9 +840,9 @@ Each chain's position value produces a naturally distinct derived key (different
 
 ```solidity
 // Each chain has its own vault contract, so deriveKey produces unique keys automatically:
-bytes32 arbKey  = keccak256(abi.encode(RELAYER_ROLE, arbVault,  callData));  // Arbitrum
-bytes32 opKey   = keccak256(abi.encode(RELAYER_ROLE, opVault,   callData));  // Optimism
-bytes32 baseKey = keccak256(abi.encode(RELAYER_ROLE, baseVault, callData));  // Base
+bytes32 arbKey  = keccak256(abi.encode(arbVault,  callData));  // Arbitrum
+bytes32 opKey   = keccak256(abi.encode(opVault,   callData));  // Optimism
+bytes32 baseKey = keccak256(abi.encode(baseVault, callData));  // Base
 ```
 
 An `AggregatedRewardAdapter` on the settlement chain reads all position keys and sums the deltas:
