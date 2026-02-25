@@ -654,16 +654,38 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 
 ## 9. Security Considerations
 
+### Transport Layer
+
 | Concern | Mitigation |
 |---|---|
-| **Unauthorized sender** | OApp peer validation: only the registered peer on the source chain can send messages. `_getPeerOrRevert` in `lzReceive()` enforces this. |
-| **Stale data** | RateAdapter reverts on stale data. StateStore silently skips out-of-order messages. |
-| **Replay / re-entrancy** | LayerZero V2 handles nonce management. StateStore update is a simple SSTORE, no external calls. |
-| **Malicious state value** | The StateSender reads values via `staticcall` from the source encoded in the key -- callers never supply the value. For permissioned keys, only addresses holding the role can trigger a push. For permissionless keys, anyone can trigger but the value is always read on-chain. |
-| **Key collision / spoofing** | Keys are deterministic hashes of `(target, callData)` or `(role, target, callData)`. Different sources, calldata, or roles always produce different keys. A permissioned and permissionless push of the same source produce different keys and never collide. |
-| **LayerZero liveness** | If LayerZero is down, rates go stale and the RateAdapter reverts, preventing trades at bad prices. This is the correct behavior. |
-| **Message ordering** | We don't require ordered delivery. The `srcTimestamp` check in StateStore ensures only newer values are accepted regardless of arrival order. |
-| **Store writer compromise** | Owner can revoke writers. In the worst case, the staleness check in RateAdapter limits the impact window. |
+| **Unauthorized cross-chain sender** | OApp peer validation: only the registered peer on the source chain can deliver messages. `_getPeerOrRevert` in `lzReceive()` enforces this. |
+| **Replay / re-entrancy** | LayerZero V2 handles nonce management. StateStore update is a simple SSTORE with no external calls. |
+| **Message ordering** | Not required. The `srcTimestamp` check in StateStore ensures only newer values are accepted regardless of arrival order. |
+| **LayerZero liveness** | If LayerZero is down, rates go stale and the RateAdapter reverts, preventing trades at bad prices. This is the correct fail-safe behavior. |
+
+### Key Derivation & Value Integrity
+
+| Concern | Mitigation |
+|---|---|
+| **Fabricated value injection** | StateSender reads values via `staticcall` -- callers never supply the value. Both permissionless and permissioned modes enforce this. A caller cannot push an arbitrary `bytes` payload. |
+| **Malicious target contract** | In permissionless mode, anyone can pass any `target` address. A malicious contract returning a fake value produces a **different derived key** than the legitimate source. Destination adapters are deployed with the legitimate key and will never read the attacker's key. The StateStore may accumulate garbage keys, but they are never consumed. |
+| **Key collision / spoofing** | Keys are deterministic hashes of `(target, callData)` or `(role, target, callData)`. Different sources, calldata, or roles always produce different keys. Permissioned and permissionless pushes of the same source produce different keys and never collide. |
+| **Source contract manipulation** | The `staticcall` faithfully reads whatever the source returns. If the source contract's return value is manipulable (e.g. via flash loans, oracle manipulation, or reentrancy on the source), the relayed value will reflect that manipulation. **Mitigation**: Use sources that are resistant to atomic manipulation (e.g. ERC-4626 vaults with TWAP-based pricing, not AMM spot prices). For sensitive values, use permissioned mode so only trusted roles can trigger reads at known-safe times. The bounded rate check in Amendment E provides an additional safety net on the destination. |
+
+### Access Control (Permissioned Mode)
+
+| Concern | Mitigation |
+|---|---|
+| **Role compromise** | If an attacker gains a role, they can trigger pushes for that role's keys — but the value is still read via `staticcall`, not caller-supplied. The damage is limited to controlling *when* a value is read (e.g. timing a push during a price manipulation window). Roles can be revoked by `DEFAULT_ADMIN_ROLE`. |
+| **Admin key compromise** | `DEFAULT_ADMIN_ROLE` can grant roles to arbitrary addresses. Standard multisig / timelock governance practices apply. This is no different from any AccessControl-based system. |
+
+### Destination Side
+
+| Concern | Mitigation |
+|---|---|
+| **Stale data** | RateAdapter reverts if `srcTimestamp` exceeds `maxStaleness`. See also Amendment B for adding a secondary `updatedAt` check to catch LayerZero delivery delays. |
+| **Store writer compromise** | Owner can revoke writers via `setWriter(addr, false)`. The staleness check in RateAdapter limits the impact window of any bad writes. |
+| **L2 timestamp reliability** | For L2 → L1 relay (reverse direction), `srcTimestamp` is set by `block.timestamp` on the L2, which the sequencer controls on optimistic rollups. Sequencers are constrained to within a few minutes of real time by protocol rules, but for high-value position data, the `updatedAt` secondary check (Amendment B) provides a chain-of-custody timestamp set by the L1 itself. |
 
 ---
 
