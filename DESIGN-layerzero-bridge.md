@@ -52,7 +52,59 @@ The system is designed around three principles:
 
 ## 3. Contract Design
 
-### 3.1 Message Format
+### 3.1 Key Derivation
+
+State keys are **deterministic hashes** derived from what is being read and (optionally) who is authorized to push it. This eliminates arbitrary key assignment and makes the key self-describing.
+
+#### Permissionless Mode
+
+The key is derived from the source contract and calldata alone:
+
+```solidity
+key = keccak256(abi.encode(target, callData))
+```
+
+Any address can push the value for any key. Since the value is always read via `staticcall(target, callData)`, the caller controls *when* but not *what*. There is no spoofing risk because the value is read on-chain at push time.
+
+**Example:**
+```solidity
+// ynETHx rate: target = ynETHx, callData = convertToAssets(1e18)
+bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (1e18));
+bytes32 key = keccak256(abi.encode(ynETHx, callData));
+// key deterministically represents "ynETHx.convertToAssets(1e18)"
+```
+
+**Best for**: Public on-chain values that anyone should be able to relay (vault rates, token prices, total supplies).
+
+#### Permissioned Mode
+
+The key additionally encodes a **role**, namespacing the keyspace by authorization group:
+
+```solidity
+key = keccak256(abi.encode(role, target, callData))
+```
+
+Only addresses holding `role` can push to this key. Different roles produce different keys for the same source, so a `RELAYER_ROLE` and an `ADMIN_ROLE` pushing the same value write to separate keys. Destination adapters pin to a specific key, implicitly trusting the role that produced it.
+
+**Example:**
+```solidity
+bytes32 RELAYER_ROLE = keccak256("RELAYER_ROLE");
+bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (1e18));
+bytes32 key = keccak256(abi.encode(RELAYER_ROLE, ynETHx, callData));
+```
+
+**Best for**: Sensitive values where you want to control who can trigger relays (cross-chain position values, reward amounts). Keepers can be added/removed from the role without changing the key or redeploying destination adapters.
+
+#### Key Properties (Both Modes)
+
+| Property | Benefit |
+|---|---|
+| **Deterministic** | Key is derived, not assigned. No admin call to bind key → source. |
+| **Self-describing** | The key encodes exactly what on-chain value it represents. |
+| **Collision-free** | Different sources, different calldata, or different roles always produce different keys. |
+| **Stable under keeper rotation** | Swapping keeper addresses doesn't change the key (permissioned mode uses role, not address). |
+
+### 3.2 Message Format
 
 All state updates are encoded as a single message:
 
@@ -62,15 +114,19 @@ bytes memory message = abi.encode(key, value, srcTimestamp);
 
 | Field | Type | Description |
 |---|---|---|
-| `key` | `bytes32` | Identifier for the state value (e.g. `keccak256("ynETHx/ETH")`) |
-| `value` | `bytes` | The state value, abi-encoded (e.g. `abi.encode(uint256(rate))`) |
+| `key` | `bytes32` | Derived key (see 3.1) |
+| `value` | `bytes` | The state value, read via `staticcall` and abi-encoded |
 | `srcTimestamp` | `uint64` | Source chain timestamp at time of read |
 
 This is intentionally flat. No message type enum, no versioning overhead. One message = one state update.
 
-### 3.2 StateSender
+### 3.3 StateSender
 
-Inherits from LayerZero V2's `OApp`. Lives on the source chain.
+Inherits from LayerZero V2's `OApp` and OpenZeppelin's `AccessControl`. Lives on the source chain.
+
+The sender is **value-constrained**: values are always read from on-chain sources via `staticcall` — callers never supply the value. Keys are deterministically derived from the source definition (and optionally a role). This eliminates the oracle manipulation vector where anyone could push a fabricated value.
+
+Both permissionless and permissioned relay modes are supported in a single contract.
 
 ```solidity
 // SPDX-License-Identifier: MIT
@@ -78,25 +134,118 @@ pragma solidity ^0.8.20;
 
 import { OApp, MessagingFee, Origin } from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import { OptionsBuilder } from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
-contract StateSender is OApp {
+contract StateSender is OApp, AccessControl {
     using OptionsBuilder for bytes;
 
     uint128 public dstGasLimit = 100_000;
 
     event StateSent(bytes32 indexed key, bytes value, uint32 dstEid);
 
-    constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {}
+    error SourceCallFailed();
+    error ReceiveNotSupported();
 
-    /// @notice Push an state value to a destination chain.
-    /// @param dstEid   LayerZero endpoint ID of destination chain.
-    /// @param key      State Key identifier.
-    /// @param value    ABI-encoded state value.
-    function sendStateValue(
+    constructor(address _endpoint, address _owner) OApp(_endpoint, _owner) {
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+    }
+
+    // ─── Key Derivation ────────────────────────────────────────────────
+
+    /// @notice Derive a permissionless key from a source definition.
+    function deriveKey(
+        address target,
+        bytes calldata callData
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(target, callData));
+    }
+
+    /// @notice Derive a permissioned key from a role + source definition.
+    function deriveKey(
+        bytes32 role,
+        address target,
+        bytes calldata callData
+    ) public pure returns (bytes32) {
+        return keccak256(abi.encode(role, target, callData));
+    }
+
+    // ─── Permissionless Relay ──────────────────────────────────────────
+
+    /// @notice Push a state value to a destination chain (permissionless).
+    ///         Anyone can call this. The value is read on-chain, not caller-supplied.
+    /// @param dstEid    LayerZero endpoint ID of destination chain.
+    /// @param target    Source contract to read from.
+    /// @param callData  Full calldata for the staticcall (selector + args).
+    function sendState(
         uint32 dstEid,
-        bytes32 key,
-        bytes calldata value
+        address target,
+        bytes calldata callData
     ) external payable {
+        bytes32 key = deriveKey(target, callData);
+        bytes memory value = _readSource(target, callData);
+        _send(dstEid, key, value);
+    }
+
+    // ─── Permissioned Relay ────────────────────────────────────────────
+
+    /// @notice Push a state value to a destination chain (permissioned).
+    ///         Only addresses holding `role` can call this.
+    /// @param dstEid    LayerZero endpoint ID of destination chain.
+    /// @param role      AccessControl role required to push this key.
+    /// @param target    Source contract to read from.
+    /// @param callData  Full calldata for the staticcall (selector + args).
+    function sendState(
+        uint32 dstEid,
+        bytes32 role,
+        address target,
+        bytes calldata callData
+    ) external payable onlyRole(role) {
+        bytes32 key = deriveKey(role, target, callData);
+        bytes memory value = _readSource(target, callData);
+        _send(dstEid, key, value);
+    }
+
+    // ─── Fee Quoting ───────────────────────────────────────────────────
+
+    /// @notice Quote the fee for a permissionless send.
+    function quoteSend(
+        uint32 dstEid,
+        address target,
+        bytes calldata callData
+    ) external view returns (uint256 nativeFee) {
+        bytes32 key = deriveKey(target, callData);
+        bytes memory value = _readSource(target, callData);
+        return _quoteFee(dstEid, key, value);
+    }
+
+    /// @notice Quote the fee for a permissioned send.
+    function quoteSend(
+        uint32 dstEid,
+        bytes32 role,
+        address target,
+        bytes calldata callData
+    ) external view returns (uint256 nativeFee) {
+        bytes32 key = deriveKey(role, target, callData);
+        bytes memory value = _readSource(target, callData);
+        return _quoteFee(dstEid, key, value);
+    }
+
+    // ─── Admin ─────────────────────────────────────────────────────────
+
+    /// @notice Owner can adjust destination gas limit.
+    function setDstGasLimit(uint128 _gasLimit) external onlyOwner {
+        dstGasLimit = _gasLimit;
+    }
+
+    // ─── Internals ─────────────────────────────────────────────────────
+
+    function _readSource(address target, bytes calldata callData) internal view returns (bytes memory) {
+        (bool ok, bytes memory result) = target.staticcall(callData);
+        if (!ok) revert SourceCallFailed();
+        return result;
+    }
+
+    function _send(uint32 dstEid, bytes32 key, bytes memory value) internal {
         bytes memory message = abi.encode(key, value, uint64(block.timestamp));
         bytes memory options = OptionsBuilder.newOptions()
             .addExecutorLzReceiveOption(dstGasLimit, 0);
@@ -106,12 +255,7 @@ contract StateSender is OApp {
         emit StateSent(key, value, dstEid);
     }
 
-    /// @notice Quote the fee for sending an state value.
-    function quoteSend(
-        uint32 dstEid,
-        bytes32 key,
-        bytes calldata value
-    ) external view returns (uint256 nativeFee) {
+    function _quoteFee(uint32 dstEid, bytes32 key, bytes memory value) internal view returns (uint256) {
         bytes memory message = abi.encode(key, value, uint64(block.timestamp));
         bytes memory options = OptionsBuilder.newOptions()
             .addExecutorLzReceiveOption(dstGasLimit, 0);
@@ -120,22 +264,29 @@ contract StateSender is OApp {
         return fee.nativeFee;
     }
 
-    /// @notice Owner can adjust destination gas limit.
-    function setDstGasLimit(uint128 _gasLimit) external onlyOwner {
-        dstGasLimit = _gasLimit;
-    }
-
     /// @dev Required by OApp but this contract only sends.
     function _lzReceive(
         Origin calldata, bytes32, bytes calldata, address, bytes calldata
     ) internal override {
-        revert("StateSender: receive not supported");
+        revert ReceiveNotSupported();
+    }
+
+    /// @dev AccessControl + OApp both define supportsInterface.
+    function supportsInterface(bytes4 interfaceId)
+        public view override(AccessControl)
+        returns (bool)
+    {
+        return super.supportsInterface(interfaceId);
     }
 }
 ```
 
 **Key decisions:**
-- `sendStateValue` is **permissionless** -- any EOA or keeper can call it and pay the gas. Access control on *what* gets sent is handled by the caller reading on-chain values.
+- **Value is always read via `staticcall`**, never caller-supplied. Eliminates oracle manipulation regardless of access mode.
+- **Permissionless mode** (`sendState(dstEid, target, callData)`): Anyone can relay any on-chain value. Key = `hash(target, callData)`.
+- **Permissioned mode** (`sendState(dstEid, role, target, callData)`): Only addresses holding `role` can push. Key = `hash(role, target, callData)`. Produces a different key than permissionless mode for the same source, so they never collide.
+- **No admin registration step** -- keys are derived, not configured. The source definition is passed at call time and hashed into the key. No `setStateSource` needed.
+- **Role-based, not address-based** -- keepers are added/removed from roles without changing the key. Destination adapters never need redeployment on keeper rotation.
 - Gas limit is configurable per-contract (not per-key) to keep it simple. 100k gas is ample for a SSTORE on the receiver side.
 - No batching for now. Sending one key at a time keeps the code trivial. Batching can be added later if needed.
 
@@ -313,13 +464,16 @@ contract RateAdapter {
 
 ### Option A: Simple Keeper (MVP)
 
-An off-chain keeper (bot or multisig) calls `StateSender.sendStateValue()` daily:
+An off-chain keeper (bot or multisig) calls `StateSender.sendState()` daily. The source definition is passed at call time — the StateSender reads the value on-chain and derives the key. The keeper decides *when* to push, not *what*.
 
 ```
-1. Read ynETHx rate on L1: ynETHx.convertToAssets(1e18)
-2. Encode: abi.encode(rate)
-3. Quote: StateSender.quoteSend(dstEid, key, encodedRate)
-4. Send:  StateSender.sendStateValue{value: fee}(dstEid, key, encodedRate)
+# Permissionless (e.g. public ynETHx rate)
+1. Quote: StateSender.quoteSend(dstEid, ynETHx, callData)
+2. Send:  StateSender.sendState{value: fee}(dstEid, ynETHx, callData)
+
+# Permissioned (e.g. cross-chain position value)
+1. Quote: StateSender.quoteSend(dstEid, RELAYER_ROLE, vault, callData)
+2. Send:  StateSender.sendState{value: fee}(dstEid, RELAYER_ROLE, vault, callData)
 ```
 
 **Pros**: Dead simple, easy to monitor.
@@ -330,28 +484,28 @@ An off-chain keeper (bot or multisig) calls `StateSender.sendStateValue()` daily
 Use [Chainlink Automation](https://automation.chain.link/) or [Gelato](https://www.gelato.network/) to trigger the push:
 
 - **Trigger**: Time-based (every 24h) or deviation-based (>0.1% rate change)
-- **Execution**: Calls `sendStateValue` on the StateSender
+- **Execution**: Calls `sendState` on the StateSender
 - **Gas funding**: Automation service pays L1 gas; LayerZero fee comes from a pre-funded contract or is forwarded
 
-A thin `AutomatedStatePusher` contract can wrap the logic:
+A thin `AutomatedStatePusher` wraps a specific source definition for automation:
 
 ```solidity
 contract AutomatedStatePusher {
     StateSender public immutable sender;
-    address public immutable rateSource; // e.g. ynETHx vault
-    bytes32 public immutable key;
+    address public immutable target;
+    bytes public callData;
     uint32 public immutable dstEid;
 
-    function pushRate() external payable {
-        uint256 rate = IERC4626(rateSource).convertToAssets(1e18);
-        bytes memory value = abi.encode(rate);
-        uint256 fee = sender.quoteSend(dstEid, key, value);
-        sender.sendStateValue{value: fee}(dstEid, key, value);
+    function push() external payable {
+        uint256 fee = sender.quoteSend(dstEid, target, callData);
+        sender.sendState{value: fee}(dstEid, target, callData);
     }
 
     receive() external payable {} // Accept ETH for gas funding
 }
 ```
+
+The pusher stores the source definition (target + callData) so automation services don't need to know it. For permissioned keys, the pusher must hold the required role on the StateSender.
 
 **Recommendation**: Start with Option A for launch, migrate to Option B once proven.
 
@@ -412,7 +566,7 @@ Our design is intentionally simpler because we don't need Centrifuge's full mult
 ```
 @layerzerolabs/oapp-evm           # OApp, OAppSender, OAppReceiver, OAppCore
 @layerzerolabs/lz-evm-protocol-v2 # ILayerZeroEndpointV2, MessagingParams, MessagingFee
-@openzeppelin/contracts            # Ownable
+@openzeppelin/contracts            # Ownable, AccessControl
 ```
 
 ### Key LayerZero V2 Concepts Used
@@ -443,8 +597,9 @@ Our design is intentionally simpler because we don't need Centrifuge's full mult
 4. Call stateStore.setWriter(stateReceiver, true) on Arbitrum
 5. Call stateSender.setPeer(30110, bytes32(uint256(uint160(stateReceiver)))) on Ethereum
 6. Call stateReceiver.setPeer(30101, bytes32(uint256(uint160(stateSender)))) on Arbitrum
-7. Deploy RateAdapter on Arbitrum (pass store + key + maxStaleness)
-8. Configure Curve pool to use RateAdapter address
+7. Derive key: stateSender.deriveKey(ynETHx, abi.encodeCall(IERC4626.convertToAssets, (1e18)))
+8. Deploy RateAdapter on Arbitrum (pass store + derived key + maxStaleness)
+9. Configure Curve pool to use RateAdapter address
 ```
 
 ---
@@ -459,10 +614,14 @@ ynETHx is an ERC-4626 vault. The exchange rate is:
 uint256 rate = ynETHx.convertToAssets(1e18); // returns 18-decimal rate
 ```
 
-### State Key
+### State Key (Derived)
+
+The key is deterministically derived from the source contract and calldata. No arbitrary label needed:
 
 ```solidity
-bytes32 constant YNETHX_ETH_RATE = keccak256("ynETHx/ETH");
+bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (1e18));
+bytes32 YNETHX_ETH_RATE = keccak256(abi.encode(ynETHx, callData));
+// This is a permissionless key — anyone can push it, value is always read on-chain.
 ```
 
 ### Push Frequency
@@ -500,7 +659,8 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 | **Unauthorized sender** | OApp peer validation: only the registered peer on the source chain can send messages. `_getPeerOrRevert` in `lzReceive()` enforces this. |
 | **Stale data** | RateAdapter reverts on stale data. StateStore silently skips out-of-order messages. |
 | **Replay / re-entrancy** | LayerZero V2 handles nonce management. StateStore update is a simple SSTORE, no external calls. |
-| **Malicious state value** | The sender is permissionless but reads from immutable on-chain sources (e.g. ERC-4626 vault). The value is trustworthy if the source contract is trustworthy. |
+| **Malicious state value** | The StateSender reads values via `staticcall` from the source encoded in the key -- callers never supply the value. For permissioned keys, only addresses holding the role can trigger a push. For permissionless keys, anyone can trigger but the value is always read on-chain. |
+| **Key collision / spoofing** | Keys are deterministic hashes of `(target, callData)` or `(role, target, callData)`. Different sources, calldata, or roles always produce different keys. A permissioned and permissionless push of the same source produce different keys and never collide. |
 | **LayerZero liveness** | If LayerZero is down, rates go stale and the RateAdapter reverts, preventing trades at bad prices. This is the correct behavior. |
 | **Message ordering** | We don't require ordered delivery. The `srcTimestamp` check in StateStore ensures only newer values are accepted regardless of arrival order. |
 | **Store writer compromise** | Owner can revoke writers. In the worst case, the staleness check in RateAdapter limits the impact window. |
@@ -511,7 +671,7 @@ The `RateAdapter.getRate()` function returns the bridged ynETHx rate as a `uint2
 
 | Operation | Estimated Gas | Notes |
 |---|---|---|
-| `StateSender.sendStateValue` (L1) | ~80,000 + LZ fee | LZ fee varies by DVN config |
+| `StateSender.sendState` (L1) | ~85,000 + LZ fee | Includes staticcall to source + LZ fee varies by DVN config |
 | `StateReceiver._lzReceive` (L2) | ~60,000 | abi.decode + SSTORE |
 | `RateAdapter.getRate` (L2 view) | ~5,000 | Two SLOADs |
 
@@ -551,13 +711,13 @@ The minimal audit surface is:
 
 | Contract | Lines (est.) | Notes |
 |---|---|---|
-| StateSender | ~50 | Thin wrapper over OApp._lzSend |
+| StateSender | ~100 | OApp + AccessControl, key derivation, staticcall reads, permissionless + permissioned modes |
 | StateReceiver | ~30 | Thin wrapper over OApp._lzReceive |
 | StateStore | ~60 | Simple SSTORE with timestamp check |
 | RateAdapter | ~20 | Pure view, no state mutation |
-| **Total** | **~160** | |
+| **Total** | **~210** | |
 
-The OApp base contracts are already audited by LayerZero. Our custom code is ~160 lines of straightforward Solidity.
+The OApp and AccessControl base contracts are already audited by LayerZero and OpenZeppelin respectively. Our custom code is ~210 lines of straightforward Solidity.
 
 ---
 
@@ -568,3 +728,272 @@ The OApp base contracts are already audited by LayerZero. Our custom code is ~16
 - **Additional bridges**: Deploy Axelar/Hyperlane receivers and add them as StateStore writers for redundancy
 - **Quorum verification**: If multi-bridge consensus becomes necessary, add a lightweight quorum check in StateStore (inspired by Centrifuge's MultiAdapter threshold pattern)
 - **Rate smoothing**: On-chain TWAP or bounded rate updates to mitigate state manipulation
+
+---
+
+## 15. Amendments
+
+### Amendment A: Cross-Chain Yield Accounting via Reverse Relay
+
+#### Problem
+
+The doc's primary use case is L1 → L2 (pushing ynETHx rate to Arbitrum for Curve). However, the FlexStrategy use case introduces a reverse flow:
+
+1. The FlexStrategy Safe moves assets **from the settlement chain to a sidechain**
+2. Those assets are deployed into yield strategies on the sidechain (e.g. Arbitrum, Optimism)
+3. Yield is earned on the sidechain
+4. The **reward amount or position value must be relayed back** to the settlement chain so `AccountingModule.processRewards(amount)` can mint AccountingTokens and update the vault's NAV
+
+#### Solution: Deploy the Same Contracts in Reverse
+
+The existing `StateSender`, `StateReceiver`, and `StateStore` contracts are chain-agnostic. The relay infrastructure for L2 → L1 is simply a mirror deployment:
+
+- Deploy `StateSender` on the **sidechain** (e.g. Arbitrum)
+- Deploy `StateReceiver` + `StateStore` on the **settlement chain** (e.g. Ethereum L1)
+- Configure peers bidirectionally
+- Use an `AutomatedStatePusher` on the sidechain that reads the position value from the yield strategy (e.g. `IERC4626(vault).convertToAssets(shares)`) and relays it to L1
+
+No new transport contracts are needed. The only net-new component is a **settlement-chain adapter** that consumes the relayed value and feeds it into the FlexStrategy's reward accounting.
+
+```
+ SIDECHAIN (e.g. Arbitrum)                    SETTLEMENT CHAIN (e.g. Ethereum L1)
+ ┌──────────────────────────────┐              ┌────────────────────────────────────┐
+ │                              │              │                                    │
+ │  Yield Strategy (earning)    │              │                                    │
+ │         │                    │              │                                    │
+ │         ▼                    │              │                                    │
+ │  ┌─────────────────────┐    │   LayerZero  │  ┌──────────────────────┐          │
+ │  │  AutomatedState-    │    │              │  │   StateReceiver     │          │
+ │  │  Pusher (reads vault)│    │   V2 Message │  │   (same OApp)       │          │
+ │  └────────┬────────────┘    │              │  └──────────┬───────────┘          │
+ │           │                  │              │             │                      │
+ │           ▼                  │              │             ▼                      │
+ │  ┌─────────────────────┐    │              │  ┌──────────────────────┐          │
+ │  │  StateSender        │────┼──────────────┼─▶│  StateStore         │          │
+ │  │  (same OApp)         │    │              │  │  (key => value)      │          │
+ │  └─────────────────────┘    │              │  └──────────┬───────────┘          │
+ │                              │              │             │                      │
+ │                              │              │             ▼                      │
+ │                              │              │  ┌──────────────────────┐          │
+ │                              │              │  │  RewardRelayAdapter │ NEW      │
+ │                              │              │  │  (delta → processR.) │          │
+ │                              │              │  └──────────┬───────────┘          │
+ │                              │              │             │                      │
+ │                              │              │             ▼                      │
+ │                              │              │  ┌──────────────────────┐          │
+ │                              │              │  │  AccountingModule   │          │
+ │                              │              │  │  (FlexStrategy)      │          │
+ │                              │              │  └──────────────────────┘          │
+ └──────────────────────────────┘              └────────────────────────────────────┘
+```
+
+#### Net-New Component: RewardRelayAdapter
+
+The only new contract is a settlement-chain adapter that reads the relayed absolute position value from StateStore, computes the reward delta since the last checkpoint, and exposes it to the rewards processor for calling `accountingModule.processRewards(delta)`.
+
+```solidity
+contract RewardRelayAdapter {
+    IStateStore public immutable stateStore;
+    bytes32 public immutable stateKey;
+    uint256 public lastRelayedValue;
+
+    /// @notice Computes the reward delta since the last relay.
+    function pendingRewards() external view returns (uint256) {
+        (bytes memory value, , ) = stateStore.getValue(stateKey);
+        uint256 currentValue = abi.decode(value, (uint256));
+        if (currentValue <= lastRelayedValue) return 0;
+        return currentValue - lastRelayedValue;
+    }
+
+    /// @notice Called by the rewards processor after processRewards succeeds.
+    function checkpoint() external onlyRewardsProcessor {
+        (bytes memory value, , ) = stateStore.getValue(stateKey);
+        lastRelayedValue = abi.decode(value, (uint256));
+    }
+}
+```
+
+#### Value Semantics: Absolute Totals, Not Deltas
+
+The relay should always send **absolute total position value**, not deltas. Rationale:
+- Deltas require tracking "last sent" state on the source chain, creating a consistency hazard if a message is lost or replayed
+- Absolute values are idempotent -- receiving the same value twice is harmless (StateStore's staleness check handles it)
+- The delta computation happens on the settlement chain where it can be validated against the AccountingModule's APR caps before being applied
+
+State key derivation for the reverse relay (permissioned, since position values are sensitive):
+```solidity
+bytes32 RELAYER_ROLE = keccak256("RELAYER_ROLE");
+bytes memory callData = abi.encodeCall(IERC4626.convertToAssets, (shares));
+bytes32 ARB_POSITION_KEY = keccak256(abi.encode(RELAYER_ROLE, arbVault, callData));
+```
+
+The relayed value represents: "The total base-asset-equivalent value of all assets deployed on this sidechain, including accrued yield."
+
+---
+
+### Amendment B: Staleness Check Should Also Consider Delivery Delay
+
+#### Problem
+
+The RateAdapter staleness check only uses `srcTimestamp`:
+```solidity
+if (block.timestamp - srcTimestamp > maxStaleness) revert StaleRate();
+```
+
+This has two issues for the L2 → L1 direction:
+1. **L2 timestamps can be sequencer-manipulated** on optimistic rollups (the sequencer sets `block.timestamp`)
+2. **LayerZero delivery delay is invisible** -- a message could be sent with a recent `srcTimestamp` but sit in the DVN verification queue for hours. The staleness check passes, but the data is actually delayed.
+
+#### Recommendation
+
+Add a secondary freshness check using `updatedAt` (when the StateStore actually received the value):
+
+```solidity
+function getRate() external view returns (uint256) {
+    (bytes memory value, uint64 srcTimestamp, uint64 updatedAt) = stateStore.getValue(stateKey);
+    if (block.timestamp - srcTimestamp > maxStaleness) revert StaleRate();
+    if (block.timestamp - updatedAt > maxDeliveryDelay) revert DeliveryDelayed();
+    return abi.decode(value, (uint256));
+}
+```
+
+Where `maxDeliveryDelay` is a shorter window (e.g. 2 hours) representing "how long ago did we actually receive this on-chain." This catches cases where LayerZero is degraded but technically still delivering old messages.
+
+---
+
+### Amendment C: Coordinating Relay Timing with AccountingModule Constraints
+
+#### Problem
+
+The FlexStrategy's AccountingModule enforces:
+- A **cooldown** between `processRewards` calls
+- An **APR cap** validated against historical snapshots
+
+The relay design has its own timing: daily pushes with a 26-hour staleness window. These are not coordinated. If the relay pushes faster than the cooldown allows, reward data accumulates in the StateStore but can't be applied. If it pushes slower, the APR cap calculation window expands, potentially allowing larger single updates.
+
+#### Recommendation
+
+The keeper/automation that calls `processRewards` on the settlement chain should:
+1. Read the latest relayed value from StateStore
+2. Compute the delta via RewardRelayAdapter
+3. Check if the AccountingModule cooldown has elapsed
+4. Simulate the APR check before submitting the transaction
+5. If the delta would exceed the APR cap, only apply up to the maximum (similar to how `RewardsSweeper.sweepRewardsUpToAPRMax()` works in the FlexStrategy)
+
+This should be codified in a `CrossChainRewardsSweeper` contract:
+
+```solidity
+contract CrossChainRewardsSweeper {
+    RewardRelayAdapter public immutable relayAdapter;
+    IAccountingModule public immutable accountingModule;
+
+    function sweepCrossChainRewards() external {
+        uint256 pending = relayAdapter.pendingRewards();
+        if (pending == 0) return;
+
+        uint256 maxRewards = accountingModule.calculateMaxRewards();
+        uint256 toProcess = pending < maxRewards ? pending : maxRewards;
+
+        accountingModule.processRewards(toProcess);
+        relayAdapter.checkpoint();
+    }
+}
+```
+
+---
+
+### Amendment D: Multi-Chain Position Aggregation
+
+#### Problem
+
+If the FlexStrategy deploys to multiple sidechains simultaneously (e.g. Arbitrum + Optimism + Base), the settlement chain needs to aggregate reward data from all of them to compute total NAV. The current single-key-single-value design works per-chain but has no aggregation pattern.
+
+#### Recommendation
+
+Each chain's position value produces a naturally distinct derived key (different target contract address on each chain), so keys are already per-chain by construction. Add an aggregation layer on the settlement side:
+
+```solidity
+// Each chain has its own vault contract, so deriveKey produces unique keys automatically:
+bytes32 arbKey  = keccak256(abi.encode(RELAYER_ROLE, arbVault,  callData));  // Arbitrum
+bytes32 opKey   = keccak256(abi.encode(RELAYER_ROLE, opVault,   callData));  // Optimism
+bytes32 baseKey = keccak256(abi.encode(RELAYER_ROLE, baseVault, callData));  // Base
+```
+
+An `AggregatedRewardAdapter` on the settlement chain reads all position keys and sums the deltas:
+
+```solidity
+contract AggregatedRewardAdapter {
+    IStateStore public immutable stateStore;
+    bytes32[] public positionKeys;
+    mapping(bytes32 => uint256) public lastRelayedValues;
+
+    function totalPendingRewards() external view returns (uint256 total) {
+        for (uint i = 0; i < positionKeys.length; i++) {
+            (bytes memory value, , ) = stateStore.getValue(positionKeys[i]);
+            uint256 current = abi.decode(value, (uint256));
+            if (current > lastRelayedValues[positionKeys[i]]) {
+                total += current - lastRelayedValues[positionKeys[i]];
+            }
+        }
+    }
+}
+```
+
+This keeps each relay path simple (one chain, one key, one value) while allowing flexible aggregation on the settlement side.
+
+---
+
+### Amendment E: Bounded Rate Update Sanity Check on StateStore
+
+#### Problem
+
+The StateStore currently accepts any `bytes` value from authorized writers with no sanity checking. A compromised writer (or bug in the relay) could write a wildly incorrect value. The RateAdapter's staleness check doesn't catch a fresh-but-wrong value.
+
+#### Recommendation
+
+Add an optional per-key bounds check in StateStore:
+
+```solidity
+struct KeyConfig {
+    uint256 maxDelta;   // max allowed change per update (in basis points)
+    uint256 lastUint;   // last decoded uint256 value (for comparison)
+    bool bounded;       // whether bounds checking is enabled for this key
+}
+
+mapping(bytes32 => KeyConfig) public keyConfigs;
+
+function updateValue(bytes32 key, bytes calldata value, uint64 srcTimestamp) external onlyWriter {
+    if (srcTimestamp <= values[key].srcTimestamp) return;
+
+    if (keyConfigs[key].bounded) {
+        uint256 newVal = abi.decode(value, (uint256));
+        uint256 oldVal = keyConfigs[key].lastUint;
+        if (oldVal > 0) {
+            uint256 delta = newVal > oldVal
+                ? ((newVal - oldVal) * 10_000) / oldVal
+                : ((oldVal - newVal) * 10_000) / oldVal;
+            if (delta > keyConfigs[key].maxDelta) revert DeltaExceedsBound();
+        }
+        keyConfigs[key].lastUint = newVal;
+    }
+
+    values[key] = StateValue({ value: value, srcTimestamp: srcTimestamp, updatedAt: uint64(block.timestamp) });
+    emit ValueUpdated(key, srcTimestamp, uint64(block.timestamp));
+}
+```
+
+For the ynETHx rate, a `maxDelta` of 100 bps (1%) per update is reasonable. For position values, a wider bound may be needed to accommodate deposit/withdrawal flows.
+
+**Trade-off**: This adds complexity to StateStore, which the original design intentionally kept minimal. An alternative is to put bounds checking only in the consumer adapters (RateAdapter, RewardRelayAdapter), keeping StateStore as a dumb pipe. The adapter-side approach is cleaner but means bad values still land in the store and could confuse off-chain monitoring.
+
+---
+
+### Amendment F: Minor Issues
+
+1. **`dstGasLimit` is per-contract, not per-destination**: If sending to multiple L2s with different gas costs, a single gas limit is either wasteful (overpaying cheap chains) or insufficient (underpaying expensive chains). Consider `mapping(uint32 => uint128) public dstGasLimits`.
+
+2. **Refund address in AutomatedStatePusher**: The `_lzSend` refunds overpaid gas to `msg.sender`. When called by Gelato/Chainlink Automation, `msg.sender` is the automation executor, not the contract owner. Excess ETH is irrecoverable. Refunds should go to the contract itself or a configurable address.
+
+3. **No liveness monitoring**: There's no way for downstream systems to proactively detect relay failure. Consider adding a `lastUpdateTimestamp(bytes32 key)` view on StateStore and a monitoring integration that alerts if no update arrives within 2x the expected push interval.
+
+4. **`StateSender._lzReceive` reverts with a string**: `revert("StateSender: receive not supported")` uses a string revert instead of a custom error. This wastes gas in the unlikely case it's triggered. Use `error ReceiveNotSupported()` instead.
