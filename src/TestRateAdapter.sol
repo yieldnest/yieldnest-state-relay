@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import { StateStore } from "./StateStore.sol";
+import {StateStore} from "./StateStore.sol";
 
 /**
  * @title TestRateAdapter
