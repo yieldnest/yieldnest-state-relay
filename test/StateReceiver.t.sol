@@ -1,0 +1,11 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import { Test } from "forge-std/Test.sol";
+import { StateReceiver } from "../src/StateReceiver.sol";
+
+contract StateReceiverTest is Test {
+    function test_placeholder() public pure {
+        assertTrue(true);
+    }
+}

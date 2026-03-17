@@ -1,0 +1,59 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+
+/**
+ * @title StateStore
+ * @notice Key -> value registry with timestamp and writer allowlist (stub).
+ */
+contract StateStore is Initializable, OwnableUpgradeable {
+    struct Entry {
+        bytes value;
+        uint64 srcTimestamp;
+        uint64 updatedAt;
+    }
+
+    mapping(bytes32 => Entry) private _entries;
+    mapping(address => bool) private _writers;
+    uint256 public maxValueSize;
+
+    event WriterSet(address indexed writer, bool allowed);
+    event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(address owner_, uint256 maxValueSize_) external initializer {
+        __Ownable_init(owner_);
+        maxValueSize = maxValueSize_;
+    }
+
+    function setWriter(address writer, bool allowed) external onlyOwner {
+        _writers[writer] = allowed;
+        emit WriterSet(writer, allowed);
+    }
+
+    function isWriter(address account) external view returns (bool) {
+        return _writers[account];
+    }
+
+    function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
+        require(_writers[msg.sender], "StateStore: not writer");
+        require(value.length <= maxValueSize, "StateStore: value too large");
+        Entry storage e = _entries[key];
+        require(srcTimestamp > e.srcTimestamp, "StateStore: stale");
+        e.value = value;
+        e.srcTimestamp = srcTimestamp;
+        e.updatedAt = uint64(block.timestamp);
+        emit StateUpdated(key, srcTimestamp, e.updatedAt);
+    }
+
+    function get(bytes32 key) external view returns (bytes memory value, uint64 srcTimestamp, uint64 updatedAt) {
+        Entry storage e = _entries[key];
+        return (e.value, e.srcTimestamp, e.updatedAt);
+    }
+}
