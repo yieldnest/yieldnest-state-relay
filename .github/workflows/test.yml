@@ -28,6 +28,14 @@ jobs:
       - name: Show Forge version
         run: forge --version
 
+      - name: Install dependencies
+        run: |
+          forge install LayerZero-Labs/devtools
+          forge install LayerZero-Labs/LayerZero-v2
+          forge install OpenZeppelin/openzeppelin-contracts
+          forge install OpenZeppelin/openzeppelin-contracts-upgradeable
+          forge install GNSPS/solidity-bytes-utils
+
       - name: Run Forge fmt
         run: forge fmt --check
 

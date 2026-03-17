@@ -5,7 +5,7 @@ import { Test } from "forge-std/Test.sol";
 import { StateSender } from "../src/StateSender.sol";
 
 contract StateSenderTest is Test {
-    function test_placeholder() public pure {
+    function test_placeholder() public  {
         assertTrue(true);
     }
 }
