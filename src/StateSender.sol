@@ -2,8 +2,10 @@
 pragma solidity ^0.8.22;
 
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
-import {OptionsBuilder} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/libs/OptionsBuilder.sol";
+import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
 
@@ -14,10 +16,10 @@ import {KeyDerivation} from "./KeyDerivation.sol";
  */
 contract StateSender is OAppUpgradeable {
     address public target;
-    address public immutable refundAddress;
-    bytes public immutable callData;
-    uint8 public immutable version;
-    address public immutable lzToken;
+    address public refundAddress;
+    bytes public callData;
+    uint8 public version;
+    IERC20 public lzToken;
 
     event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
 
@@ -45,7 +47,7 @@ contract StateSender is OAppUpgradeable {
         __OApp_init(_owner);
         target = _target;
         refundAddress = _refundAddress;
-        lzToken = _lzToken;
+        lzToken = IERC20(_lzToken);
         callData = _callData;
         version = _version;
     }
@@ -58,7 +60,7 @@ contract StateSender is OAppUpgradeable {
         // encode data
         bytes memory message = _createMessage(key, stateData);
         // set options (80000 gas limit for simple storage on destination chain)
-        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(80000, 0);
+        bytes memory options = OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 80000, 0);
         // get quote
         MessagingFee memory fee = _quote(_dstEid, message, "", _payInLzToken);
 
@@ -68,22 +70,21 @@ contract StateSender is OAppUpgradeable {
             if (balance < fee.lzTokenFee) {
                 // transfer balance difference from sender to this contract
                 uint256 balanceDifference = fee.lzTokenFee - balance;
-                SafeERC20.transferFrom(lzToken, msg.sender, address(this), balanceDifference);
+                SafeERC20.safeTransferFrom(lzToken, msg.sender, address(this), balanceDifference);
             }
 
-            SafeERC20.approve(lzToken, address(endpoint), fee.lzTokenFee);
+            SafeERC20.safeIncreaseAllowance(lzToken, address(endpoint), fee.lzTokenFee);
             _lzSend(_dstEid, message, options, fee, refundAddress);
-            
         } else {
             require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
-            _lzSend{value: fee.nativeFee}(_dstEid, message, options, fee, refundAddress);
+            _lzSend(_dstEid, message, options, fee, refundAddress);
         }
 
         emit StateSent(key, _dstEid, _payInLzToken, message);
     }
 
     function _getStaticCallData() internal view returns (bytes memory) {
-        (bool success, bytes memory data) = target.staticcall(_callData);
+        (bool success, bytes memory data) = target.staticcall(callData);
 
         require(success, "StateSender: staticcall failed");
 
