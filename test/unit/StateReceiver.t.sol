@@ -20,16 +20,14 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         setUpEndpoints(1, LibraryType.UltraLightNode);
 
         StateStore impl = new StateStore();
-        bytes memory storeInit =
-            abi.encodeCall(StateStore.initialize, (address(this), 1024, new address[](0)));
+        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), 1024, new address[](0)));
         ERC1967Proxy storeProxy = new ERC1967Proxy(address(impl), storeInit);
         stateStore = StateStore(address(storeProxy));
 
         StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[EID]));
         uint8[] memory versions = new uint8[](1);
         versions[0] = 1;
-        bytes memory recvInit =
-            abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore), versions));
+        bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore), versions));
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         receiver = StateReceiverHarness(address(recvProxy));
 

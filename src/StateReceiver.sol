@@ -21,16 +21,12 @@ contract StateReceiver is OAppUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
-    function initialize(address _owner, address _stateStore)
-        external
-        reinitializer(1)
-    {
+    function initialize(address _owner, address _stateStore) external reinitializer(1) {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);
 
-            supportedVersions[1] = true;
-    
+        supportedVersions[1] = true;
     }
 
     function setSupportedVersion(uint8 version, bool supported) external onlyOwner {

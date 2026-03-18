@@ -27,11 +27,11 @@ abstract contract StateReaderBase {
         _assertStaleness(srcTimestamp, updatedAt);
         return data;
     }
+
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
         require(block.timestamp >= srcTimestamp, "StateReaderBase: source timestamp in future");
         require(block.timestamp - srcTimestamp <= maxSrcStaleness, "StateReaderBase: source stale");
         require(block.timestamp >= updatedAt, "StateReaderBase: delivery timestamp in future");
         require(block.timestamp - updatedAt <= maxDstStaleness, "StateReaderBase: delivery stale");
     }
-
 }
