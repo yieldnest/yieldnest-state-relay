@@ -22,6 +22,8 @@ contract StateReceiver is OAppUpgradeable {
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
     function initialize(address _owner, address _stateStore) external reinitializer(1) {
+        require(_owner != address(0), "Invalid owner");
+        require(_stateStore != address(0), "Invalid stateStore");
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);
