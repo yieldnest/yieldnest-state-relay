@@ -25,8 +25,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         stateStore = StateStore(address(storeProxy));
 
         StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[EID]));
-        bytes memory recvInit =
-            abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
+        bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         receiver = StateReceiverHarness(address(recvProxy));
 
