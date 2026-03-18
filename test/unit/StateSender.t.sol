@@ -29,16 +29,21 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender impl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(mockTarget), address(this), address(0), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(mockTarget),
+                address(this),
+                address(0),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
 
         // MessageSink: (endpoint, delegate)
-        address sinkAddr = _deployOApp(
-            type(MessageSink).creationCode,
-            abi.encode(address(endpoints[DST_EID]), address(this))
-        );
+        address sinkAddr =
+            _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
         messageSink = MessageSink(sinkAddr);
 
         wireOApps(toAddressArray(address(proxy), sinkAddr));
@@ -68,9 +73,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         assertEq(abi.decode(stateData, (uint256)), 1e18);
 
         bytes32 expectedKey = KeyDerivation.deriveKey(
-            block.chainid,
-            address(mockTarget),
-            abi.encodeWithSelector(MockRateTarget.getRate.selector)
+            block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
         assertEq(key, expectedKey);
     }
@@ -86,7 +89,14 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender badImpl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(badImpl), address(this), address(0), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(badImpl),
+                address(this),
+                address(0),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
         StateSender badSender = StateSender(address(badProxy));
@@ -101,9 +111,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
 
         (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
         bytes32 expectedKey = KeyDerivation.deriveKey(
-            block.chainid,
-            address(mockTarget),
-            abi.encodeWithSelector(MockRateTarget.getRate.selector)
+            block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
         assertEq(key, expectedKey);
     }

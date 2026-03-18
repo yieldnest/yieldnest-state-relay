@@ -15,13 +15,11 @@ contract MessageSink is OApp {
 
     constructor(address _endpoint, address _delegate) OApp(_endpoint, _delegate) Ownable(_delegate) {}
 
-    function _lzReceive(
-        Origin calldata _origin,
-        bytes32,
-        bytes calldata _message,
-        address,
-        bytes calldata
-    ) internal virtual override {
+    function _lzReceive(Origin calldata _origin, bytes32, bytes calldata _message, address, bytes calldata)
+        internal
+        virtual
+        override
+    {
         lastOrigin = _origin;
         lastMessage = _message;
     }

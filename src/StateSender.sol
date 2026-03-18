@@ -19,9 +19,15 @@ contract StateSender is OAppUpgradeable {
     address public refundAddress;
     bytes public callData;
     uint8 public version;
+
     IERC20 public lzToken;
 
     event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
+    event TargetSet(address target);
+    event RefundAddressSet(address refundAddress);
+    event LzTokenSet(address lzToken);
+    event CallDataSet(bytes callData);
+    event VersionSet(uint8 version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -52,6 +58,31 @@ contract StateSender is OAppUpgradeable {
         version = _version;
     }
 
+    function setTarget(address _target) external onlyOwner {
+        target = _target;
+        emit TargetSet(_target);
+    }
+
+    function setRefundAddress(address _refundAddress) external onlyOwner {
+        refundAddress = _refundAddress;
+        emit RefundAddressSet(_refundAddress);
+    }
+
+    function setLzToken(address _lzToken) external onlyOwner {
+        lzToken = IERC20(_lzToken);
+        emit LzTokenSet(_lzToken);
+    }
+
+    function setCallData(bytes memory _callData) external onlyOwner {
+        callData = _callData;
+        emit CallDataSet(_callData);
+    }
+
+    function setVersion(uint8 _version) external onlyOwner {
+        version = _version;
+        emit VersionSet(_version);
+    }
+
     /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
     function quoteSendState(uint32 _dstEid, bool _payInLzToken) external view returns (MessagingFee memory fee) {
         bytes memory stateData = _getStaticCallData();
@@ -67,8 +98,8 @@ contract StateSender is OAppUpgradeable {
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         // encode data
         bytes memory message = _createMessage(key, stateData);
-        bytes memory options = _getDefaultOptions();
         // get quote
+        bytes memory options = _getDefaultOptions();
         MessagingFee memory fee = _quote(_dstEid, message, options, _payInLzToken);
 
         if (_payInLzToken) {

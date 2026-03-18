@@ -49,13 +49,11 @@ abstract contract StateReceiver is OAppUpgradeable {
     // implement in specific state receiver contract
     function _decodeValue(bytes memory value) internal view virtual returns (bytes memory);
 
-    function _lzReceive(
-        Origin calldata,
-        bytes32,
-        bytes calldata _message,
-        address,
-        bytes calldata
-    ) internal virtual override {
+    function _lzReceive(Origin calldata, bytes32, bytes calldata _message, address, bytes calldata)
+        internal
+        virtual
+        override
+    {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
 
         // check if version is supported
