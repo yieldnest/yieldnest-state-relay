@@ -8,7 +8,7 @@ pragma solidity ^0.8.22;
 library KeyDerivation {
     bytes32 public constant KEY_DOMAIN = keccak256("LZ_STATE_RELAY_V1");
 
-    function deriveKey(uint256 chainId, address target, bytes calldata callData) internal pure returns (bytes32) {
+    function deriveKey(uint256 chainId, address target, bytes memory callData) internal pure returns (bytes32) {
         return keccak256(abi.encode(KEY_DOMAIN, chainId, target, callData));
     }
 }

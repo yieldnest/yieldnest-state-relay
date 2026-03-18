@@ -27,9 +27,12 @@ contract StateStore is Initializable, OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address owner_, uint256 maxValueSize_) external initializer {
+    function initialize(address owner_, uint256 maxValueSize_, address[] memory writers_) external initializer {
         __Ownable_init(owner_);
         maxValueSize = maxValueSize_;
+        for (uint256 i = 0; i < writers_.length; i++) {
+            _writers[writers_[i]] = true;
+        }
     }
 
     function setWriter(address writer, bool allowed) external onlyOwner {
@@ -37,12 +40,12 @@ contract StateStore is Initializable, OwnableUpgradeable {
         emit WriterSet(writer, allowed);
     }
 
-    function isWriter(address account) external view returns (bool) {
+    function isWriter(address account) public view returns (bool) {
         return _writers[account];
     }
 
     function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
-        require(_writers[msg.sender], "StateStore: not writer");
+        require(isWriter(msg.sender), "StateStore: not writer");
         require(value.length <= maxValueSize, "StateStore: value too large");
         Entry storage e = _entries[key];
         require(srcTimestamp > e.srcTimestamp, "StateStore: stale");

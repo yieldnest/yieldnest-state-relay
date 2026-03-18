@@ -2,7 +2,12 @@
 pragma solidity ^0.8.22;
 
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
+import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {KeyDerivation} from "./KeyDerivation.sol";
 
 /**
  * @title StateSender
@@ -10,16 +15,127 @@ import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppRec
  * @dev Stub: key derivation and send logic to be implemented.
  */
 contract StateSender is OAppUpgradeable {
+    address public target;
+    address public refundAddress;
+    bytes public callData;
+    uint8 public version;
+
+    IERC20 public lzToken;
+
+    event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
+    event TargetSet(address target);
+    event RefundAddressSet(address refundAddress);
+    event LzTokenSet(address lzToken);
+    event CallDataSet(bytes callData);
+    event VersionSet(uint8 version);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
+    constructor(address _endpoint) OAppUpgradeable(_endpoint) {
+        _disableInitializers();
+    }
 
     /**
      * @notice Initialize the OApp and ownership.
      * @param _owner Delegate and owner (capable of configuring peers, etc.)
+     * @param _target The target contract to send the state to
+     * @param _callData The function signature and data to make the staticcall state retrieval from the target contract
+     * @param _version The version of the state relay
      */
-    function initialize(address _owner) external reinitializer(1) {
+    function initialize(
+        address _owner,
+        address _target,
+        address _refundAddress,
+        address _lzToken,
+        bytes memory _callData,
+        uint8 _version
+    ) external reinitializer(1) {
         __Ownable_init(_owner);
         __OApp_init(_owner);
+        target = _target;
+        refundAddress = _refundAddress;
+        lzToken = IERC20(_lzToken);
+        callData = _callData;
+        version = _version;
+    }
+
+    function setTarget(address _target) external onlyOwner {
+        target = _target;
+        emit TargetSet(_target);
+    }
+
+    function setRefundAddress(address _refundAddress) external onlyOwner {
+        refundAddress = _refundAddress;
+        emit RefundAddressSet(_refundAddress);
+    }
+
+    function setLzToken(address _lzToken) external onlyOwner {
+        lzToken = IERC20(_lzToken);
+        emit LzTokenSet(_lzToken);
+    }
+
+    function setCallData(bytes memory _callData) external onlyOwner {
+        callData = _callData;
+        emit CallDataSet(_callData);
+    }
+
+    function setVersion(uint8 _version) external onlyOwner {
+        version = _version;
+        emit VersionSet(_version);
+    }
+
+    /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
+    function quoteSendState(uint32 _dstEid, bool _payInLzToken) external view returns (MessagingFee memory fee) {
+        bytes memory stateData = _getStaticCallData();
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
+        bytes memory message = _createMessage(key, stateData);
+        return _quote(_dstEid, message, _getDefaultOptions(), _payInLzToken);
+    }
+
+    function sendState(uint32 _dstEid, bool _payInLzToken) external payable {
+        // get state data
+        bytes memory stateData = _getStaticCallData();
+        // derive key
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
+        // encode data
+        bytes memory message = _createMessage(key, stateData);
+        // get quote
+        bytes memory options = _getDefaultOptions();
+        MessagingFee memory fee = _quote(_dstEid, message, options, _payInLzToken);
+
+        if (_payInLzToken) {
+            uint256 balance = lzToken.balanceOf(address(this));
+
+            if (balance < fee.lzTokenFee) {
+                // transfer balance difference from sender to this contract
+                uint256 balanceDifference = fee.lzTokenFee - balance;
+                SafeERC20.safeTransferFrom(lzToken, msg.sender, address(this), balanceDifference);
+            }
+
+            SafeERC20.safeIncreaseAllowance(lzToken, address(endpoint), fee.lzTokenFee);
+            _lzSend(_dstEid, message, options, fee, refundAddress);
+        } else {
+            require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
+            _lzSend(_dstEid, message, options, fee, refundAddress);
+        }
+
+        emit StateSent(key, _dstEid, _payInLzToken, message);
+    }
+
+    /// @dev Options used for quote and send (executor lzReceive gas + value for destination).
+    function _getDefaultOptions() internal pure returns (bytes memory) {
+        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
+    }
+
+    function _getStaticCallData() internal view returns (bytes memory) {
+        (bool success, bytes memory data) = target.staticcall(callData);
+
+        require(success, "StateSender: staticcall failed");
+
+        return data;
+    }
+
+    function _createMessage(bytes32 key, bytes memory stateData) internal view returns (bytes memory) {
+        return abi.encode(block.chainid, key, stateData, block.timestamp);
     }
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {

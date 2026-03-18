@@ -18,7 +18,8 @@ contract Deploy is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         StateStore impl = new StateStore();
-        bytes memory initData = abi.encodeCall(StateStore.initialize, (owner, maxValueSize));
+        address[] memory writers = new address[](0);
+        bytes memory initData = abi.encodeCall(StateStore.initialize, (owner, maxValueSize, writers));
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(impl), owner, initData);
         StateStore stateStore = StateStore(address(proxy));
 
