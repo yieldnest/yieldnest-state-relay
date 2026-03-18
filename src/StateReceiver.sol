@@ -17,20 +17,20 @@ contract StateReceiver is OAppUpgradeable {
 
     event SupportedVersionSet(uint8 version, bool supported);
     event StateReceived(bytes32 key, bytes value, uint64 srcTimestamp);
-
+    event UnsupportedVersionReceived(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
-    function initialize(address _owner, address _stateStore, uint8[] memory _supportedVersions)
+    function initialize(address _owner, address _stateStore)
         external
         reinitializer(1)
     {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);
-        for (uint256 i = 0; i < _supportedVersions.length; i++) {
-            supportedVersions[_supportedVersions[i]] = true;
-        }
+
+            supportedVersions[1] = true;
+    
     }
 
     function setSupportedVersion(uint8 version, bool supported) external onlyOwner {
@@ -59,6 +59,8 @@ contract StateReceiver is OAppUpgradeable {
             stateStore.write(key, value, srcTimestamp);
             // emit event
             emit StateReceived(key, value, srcTimestamp);
+        } else {
+            emit UnsupportedVersionReceived(version);
         }
         // if version is not supported ignore the message
     }

@@ -14,6 +14,7 @@ abstract contract StateReaderBase {
     uint256 public maxDstStaleness;
 
     constructor(address _stateStore, bytes32 _stateKey, uint256 _maxSrcStaleness, uint256 _maxDstStaleness) {
+        require(_stateStore != address(0), "StateReaderBase: zero address");
         stateStore = StateStore(_stateStore);
         stateKey = _stateKey;
         maxSrcStaleness = _maxSrcStaleness;
@@ -26,9 +27,11 @@ abstract contract StateReaderBase {
         _assertStaleness(srcTimestamp, updatedAt);
         return data;
     }
-
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
+        require(block.timestamp >= srcTimestamp, "StateReaderBase: source timestamp in future");
         require(block.timestamp - srcTimestamp <= maxSrcStaleness, "StateReaderBase: source stale");
+        require(block.timestamp >= updatedAt, "StateReaderBase: delivery timestamp in future");
         require(block.timestamp - updatedAt <= maxDstStaleness, "StateReaderBase: delivery stale");
     }
+
 }
