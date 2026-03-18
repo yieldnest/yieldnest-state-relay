@@ -11,7 +11,7 @@ import {KeyDerivation} from "./KeyDerivation.sol";
  * @title StateReceiver
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).
  */
-abstract contract StateReceiver is OAppUpgradeable {
+contract StateReceiver is OAppUpgradeable {
     StateStore public stateStore;
     mapping(uint8 => bool) public supportedVersions;
 
@@ -40,14 +40,11 @@ abstract contract StateReceiver is OAppUpgradeable {
 
     function _decodePayload(bytes calldata message)
         internal
-        view
+        pure
         returns (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp)
     {
         (version, key, value, srcTimestamp) = abi.decode(message, (uint8, bytes32, bytes, uint64));
     }
-
-    // implement in specific state receiver contract
-    function _decodeValue(bytes memory value) internal view virtual returns (bytes memory);
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata _message, address, bytes calldata)
         internal
@@ -57,12 +54,12 @@ abstract contract StateReceiver is OAppUpgradeable {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
 
         // check if version is supported
-        require(supportedVersions[version], "StateReceiver: unsupported version");
-        // decode value
-        bytes memory decodedValue = _decodeValue(value);
+        if(supportedVersions[version]) {
         // call stateStore.write()
-        stateStore.write(key, decodedValue, srcTimestamp);
+        stateStore.write(key, value, srcTimestamp);
         // emit event
-        emit StateReceived(key, decodedValue, srcTimestamp);
+        emit StateReceived(key, value, srcTimestamp);
+        }
+        // if version is not supported ignore the message
     }
 }
