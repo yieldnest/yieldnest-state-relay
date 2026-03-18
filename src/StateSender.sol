@@ -52,6 +52,14 @@ contract StateSender is OAppUpgradeable {
         version = _version;
     }
 
+    /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
+    function quoteSendState(uint32 _dstEid, bool _payInLzToken) external view returns (MessagingFee memory fee) {
+        bytes memory stateData = _getStaticCallData();
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
+        bytes memory message = _createMessage(key, stateData);
+        return _quote(_dstEid, message, _getDefaultOptions(), _payInLzToken);
+    }
+
     function sendState(uint32 _dstEid, bool _payInLzToken) external payable {
         // get state data
         bytes memory stateData = _getStaticCallData();
@@ -59,10 +67,9 @@ contract StateSender is OAppUpgradeable {
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         // encode data
         bytes memory message = _createMessage(key, stateData);
-        // set options (80000 gas limit for simple storage on destination chain)
-        bytes memory options = OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 80000, 0);
+        bytes memory options = _getDefaultOptions();
         // get quote
-        MessagingFee memory fee = _quote(_dstEid, message, "", _payInLzToken);
+        MessagingFee memory fee = _quote(_dstEid, message, options, _payInLzToken);
 
         if (_payInLzToken) {
             uint256 balance = lzToken.balanceOf(address(this));
@@ -81,6 +88,11 @@ contract StateSender is OAppUpgradeable {
         }
 
         emit StateSent(key, _dstEid, _payInLzToken, message);
+    }
+
+    /// @dev Options used for quote and send (executor lzReceive gas + value for destination).
+    function _getDefaultOptions() internal pure returns (bytes memory) {
+        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
     }
 
     function _getStaticCallData() internal view returns (bytes memory) {
