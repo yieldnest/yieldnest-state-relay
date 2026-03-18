@@ -54,11 +54,11 @@ contract StateReceiver is OAppUpgradeable {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
 
         // check if version is supported
-        if(supportedVersions[version]) {
-        // call stateStore.write()
-        stateStore.write(key, value, srcTimestamp);
-        // emit event
-        emit StateReceived(key, value, srcTimestamp);
+        if (supportedVersions[version]) {
+            // call stateStore.write()
+            stateStore.write(key, value, srcTimestamp);
+            // emit event
+            emit StateReceived(key, value, srcTimestamp);
         }
         // if version is not supported ignore the message
     }
