@@ -1,0 +1,19 @@
+{
+  "name": "sample-relay",
+  "version": "v0.0.1",
+  "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "receiverChainId": 8453,
+  "dst": {
+    "maxValueSize": 1024
+  },
+  "senders": {
+    "example-mainnet-rate": {
+      "chainId": 1,
+      "target": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "callData": "0x00",
+      "refundAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "lzToken": "0x0000000000000000000000000000000000000000",
+      "protocolVersion": 1
+    }
+  }
+}
