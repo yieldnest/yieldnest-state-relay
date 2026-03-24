@@ -20,7 +20,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         setUpEndpoints(1, LibraryType.UltraLightNode);
 
         StateStore impl = new StateStore();
-        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), 1024, new address[](0)));
+        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy storeProxy = new ERC1967Proxy(address(impl), storeInit);
         stateStore = StateStore(address(storeProxy));
 

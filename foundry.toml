@@ -7,6 +7,11 @@ via_ir = true
 optimizer = true
 optimizer_runs = 200
 
+fs_permissions = [
+    { access = "read", path = "./script" },
+    { access = "read-write", path = "./deployments" },
+]
+
 remappings = [
     "@layerzerolabs/lz-evm-v1-0.7/=lib/LayerZero-v1/",
     "@layerzerolabs/oapp-evm/=lib/devtools/packages/oapp-evm/",
@@ -18,5 +23,7 @@ remappings = [
     "@openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/",
     "solidity-bytes-utils/=lib/solidity-bytes-utils/",
 ]
+
+# Fork tests: `forge test --match-contract StateRelayFork` — set ETH_MAINNET_RPC / ARBITRUM_RPC in `.env` (stable RPC; public URLs often flake)
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
