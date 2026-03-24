@@ -74,22 +74,16 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         return dst;
     }
 
-    function runConfigureForChain() internal {
+    /// @dev Step 3 — LayerZero wiring for **StateSender(s)** on this chain (needs `StateReceiver` in deployment JSON).
+    function configureSenders() internal {
         uint256 cid = block.chainid;
         require(isSupportedChainId(cid), "StateRelay: rpc chain not in BaseData");
 
         address recv = stateReceiverOf[receiverChainId];
-        require(recv != address(0), "StateRelay: StateReceiver address missing in deployment file");
-
-        if (cid == receiverChainId) {
-            (uint256[] memory remoteChains, bytes32[] memory remotePeers) = _receiverRemotePeers();
-            _configurePeersReceiver(IOAppCore(recv), remoteChains, remotePeers);
-            _configureSendLibs(recv, remoteChains);
-            _configureReceiveLibs(recv, remoteChains);
-            _configureDVNs(recv, remoteChains);
-            _configureExecutor(recv, remoteChains);
-            _configureDelegate(recv);
-        }
+        require(
+            recv != address(0),
+            "StateRelay: StateReceiver missing in deployment JSON; run step 2 on receiver RPC with --broadcast, then retry"
+        );
 
         uint256[] memory dstOnlyReceiver = _dstChainIdsForSender();
         bytes32 recvB32 = addressToBytes32(recv);
@@ -111,6 +105,31 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         }
     }
 
+    /// @dev Step 4 — LayerZero wiring for **StateReceiver** on `receiverChainId` RPC only (needs senders in deployment JSON).
+    function configureReceiver() internal {
+        uint256 cid = block.chainid;
+        require(isSupportedChainId(cid), "StateRelay: rpc chain not in BaseData");
+        require(cid == receiverChainId, "StateRelay: receiver configure only on receiver chain RPC");
+
+        address recv = stateReceiverOf[receiverChainId];
+        if (recv == address(0)) {
+            console.log("Step 4 needs StateReceiver address under .chains.<receiverChainId>.stateReceiver");
+            console.log("receiverChainId from input:", receiverChainId);
+            console.log("deployment file:", deploymentFilePath());
+            revert(
+                "StateRelay: run 2_DeployStateRelayDestination on THIS chain's RPC (receiverChainId) with --broadcast; then retry"
+            );
+        }
+
+        (uint256[] memory remoteChains, bytes32[] memory remotePeers) = _receiverRemotePeers();
+        _configurePeersReceiver(IOAppCore(recv), remoteChains, remotePeers);
+        _configureSendLibs(recv, remoteChains);
+        _configureReceiveLibs(recv, remoteChains);
+        _configureDVNs(recv, remoteChains);
+        _configureExecutor(recv, remoteChains);
+        _configureDelegate(recv);
+    }
+
     function _configurePeersReceiver(IOAppCore oapp, uint256[] memory remoteChainIds, bytes32[] memory peers) internal {
         require(remoteChainIds.length == peers.length, "StateRelay: peer array length");
         console.log("Configuring StateReceiver peers...");
@@ -118,13 +137,13 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             uint256 remoteCid = remoteChainIds[i];
             uint32 srcEid = getEID(remoteCid);
             if (oapp.peers(srcEid) == peers[i]) {
-                console.log("Receiver peer already set for chainId %s", vm.toString(remoteCid));
+                console.log("Receiver peer already set chainId", remoteCid);
                 continue;
             }
-            vm.startBroadcast();
+            _startBroadcast();
             oapp.setPeer(srcEid, peers[i]);
             vm.stopBroadcast();
-            console.log("Receiver set peer for chainId %s", vm.toString(remoteCid));
+            console.log("Receiver set peer chainId", remoteCid);
         }
     }
 
@@ -135,13 +154,13 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         for (uint256 i; i < dstChainIds.length; i++) {
             uint32 dstEid = getEID(dstChainIds[i]);
             if (oapp.peers(dstEid) == receiverPeer) {
-                console.log("Sender peer already set for dst chainId %s", vm.toString(dstChainIds[i]));
+                console.log("Sender peer already set dst chainId", dstChainIds[i]);
                 continue;
             }
-            vm.startBroadcast();
+            _startBroadcast();
             oapp.setPeer(dstEid, receiverPeer);
             vm.stopBroadcast();
-            console.log("Sender set peer for dst chainId %s", vm.toString(dstChainIds[i]));
+            console.log("Sender set peer dst chainId", dstChainIds[i]);
         }
     }
 
@@ -152,13 +171,13 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             uint256 chainId = otherChainIds[i];
             uint32 eid = getEID(chainId);
             if (lzEndpoint.getSendLibrary(oapp, eid) == getData(block.chainid).LZ_SEND_LIB) {
-                console.log("Send lib already set for chainId %s", vm.toString(chainId));
+                console.log("Send lib already set chainId", chainId);
                 continue;
             }
-            vm.startBroadcast();
+            _startBroadcast();
             lzEndpoint.setSendLibrary(oapp, eid, getData(block.chainid).LZ_SEND_LIB);
             vm.stopBroadcast();
-            console.log("Set send library for chainId %s", vm.toString(chainId));
+            console.log("Set send library chainId", chainId);
         }
     }
 
@@ -170,13 +189,13 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             uint32 eid = getEID(chainId);
             (address lib, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
             if (lib == getData(block.chainid).LZ_RECEIVE_LIB && isDefault == false) {
-                console.log("Receive lib already set for chainId %s", vm.toString(chainId));
+                console.log("Receive lib already set chainId", chainId);
                 continue;
             }
-            vm.startBroadcast();
+            _startBroadcast();
             lzEndpoint.setReceiveLibrary(oapp, eid, getData(block.chainid).LZ_RECEIVE_LIB, 0);
             vm.stopBroadcast();
-            console.log("Set receive library for chainId %s", vm.toString(chainId));
+            console.log("Set receive library chainId", chainId);
         }
     }
 
@@ -226,18 +245,18 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
                     && keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, dstEid, CONFIG_TYPE_ULN))
                         == keccak256(abi.encode(ulnConfig))
             ) {
-                console.log("DVNs already set for chainId %s", vm.toString(chainId));
+                console.log("DVNs already set chainId", chainId);
                 continue;
             }
 
             SetConfigParam[] memory params = new SetConfigParam[](1);
             params[0] = SetConfigParam(dstEid, CONFIG_TYPE_ULN, abi.encode(ulnConfig));
 
-            vm.startBroadcast();
+            _startBroadcast();
             lzEndpoint.setConfig(oapp, data.LZ_SEND_LIB, params);
             lzEndpoint.setConfig(oapp, data.LZ_RECEIVE_LIB, params);
             vm.stopBroadcast();
-            console.log("Set DVNs for chainId %s", vm.toString(chainId));
+            console.log("Set DVNs chainId", chainId);
         }
     }
 
@@ -256,17 +275,17 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
                 keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, dstEid, CONFIG_TYPE_EXECUTOR))
                     == keccak256(abi.encode(executorConfig))
             ) {
-                console.log("Executor already set for chainId %s", vm.toString(chainId));
+                console.log("Executor already set chainId", chainId);
                 continue;
             }
 
             SetConfigParam[] memory params = new SetConfigParam[](1);
             params[0] = SetConfigParam(dstEid, CONFIG_TYPE_EXECUTOR, abi.encode(executorConfig));
 
-            vm.startBroadcast();
+            _startBroadcast();
             lzEndpoint.setConfig(oapp, data.LZ_SEND_LIB, params);
             vm.stopBroadcast();
-            console.log("Set executor for chainId %s", vm.toString(chainId));
+            console.log("Set executor chainId", chainId);
         }
     }
 
@@ -275,7 +294,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         ILZEndpointDelegates ep = ILZEndpointDelegates(data.LZ_ENDPOINT);
         address targetDelegate = data.OFT_OWNER;
         if (ep.delegates(oapp) != targetDelegate) {
-            vm.startBroadcast();
+            _startBroadcast();
             IOAppCore(oapp).setDelegate(targetDelegate);
             vm.stopBroadcast();
             console.log("Set OApp delegate to OFT_OWNER");

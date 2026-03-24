@@ -61,6 +61,8 @@ contract BaseData is Script {
     // Array of all supported chain IDs for easy iteration
     uint256[] private supportedChainIds;
     uint256[] private supportedTestnetChainIds;
+    mapping(uint256 => bool) private __chainSupported;
+    mapping(uint256 => bool) private __chainIsTestnet;
     mapping(uint256 => Data) private __chainIdToData;
     mapping(uint256 => ChainRecord) private chainRecords; // for display purposes
     mapping(uint32 => uint256) private zlEIDToChainId;
@@ -512,46 +514,55 @@ contract BaseData is Script {
         fillLzEidToChainId();
     }
 
+    function _pushSupportedChain(uint256 chainId) private {
+        supportedChainIds.push(chainId);
+        __chainSupported[chainId] = true;
+    }
+
+    function _registerTestnetId(uint256 chainId) private {
+        supportedTestnetChainIds.push(chainId);
+        __chainIsTestnet[chainId] = true;
+    }
+
     function fillSupportedChainIds() internal {
-        supportedChainIds.push(__chainIds.mainnet);
-        supportedChainIds.push(__chainIds.base);
-        supportedChainIds.push(__chainIds.fraxtal);
-        supportedChainIds.push(__chainIds.optimism);
-        supportedChainIds.push(__chainIds.arbitrum);
-        supportedChainIds.push(__chainIds.manta);
-        supportedChainIds.push(__chainIds.taiko);
-        supportedChainIds.push(__chainIds.scroll);
-        supportedChainIds.push(__chainIds.fantom);
-        supportedChainIds.push(__chainIds.mantle);
-        supportedChainIds.push(__chainIds.blast);
-        supportedChainIds.push(__chainIds.linea);
-        supportedChainIds.push(__chainIds.bera);
-        supportedChainIds.push(__chainIds.binance);
-        supportedChainIds.push(__chainIds.hemi);
-        supportedChainIds.push(__chainIds.ink);
-        supportedChainIds.push(__chainIds.nibiru);
-        supportedChainIds.push(__chainIds.xlayer);
-        supportedChainIds.push(__chainIds.plasma);
-        supportedChainIds.push(__chainIds.plume);
-        supportedChainIds.push(__chainIds.avax);
-        supportedChainIds.push(__chainIds.polygon);
-        supportedChainIds.push(__chainIds.xdc);
-        supportedChainIds.push(__chainIds.katana);
+        _pushSupportedChain(__chainIds.mainnet);
+        _pushSupportedChain(__chainIds.base);
+        _pushSupportedChain(__chainIds.fraxtal);
+        _pushSupportedChain(__chainIds.optimism);
+        _pushSupportedChain(__chainIds.arbitrum);
+        _pushSupportedChain(__chainIds.manta);
+        _pushSupportedChain(__chainIds.taiko);
+        _pushSupportedChain(__chainIds.scroll);
+        _pushSupportedChain(__chainIds.fantom);
+        _pushSupportedChain(__chainIds.mantle);
+        _pushSupportedChain(__chainIds.blast);
+        _pushSupportedChain(__chainIds.linea);
+        _pushSupportedChain(__chainIds.bera);
+        _pushSupportedChain(__chainIds.binance);
+        _pushSupportedChain(__chainIds.hemi);
+        _pushSupportedChain(__chainIds.ink);
+        _pushSupportedChain(__chainIds.nibiru);
+        _pushSupportedChain(__chainIds.xlayer);
+        _pushSupportedChain(__chainIds.plasma);
+        _pushSupportedChain(__chainIds.plume);
+        _pushSupportedChain(__chainIds.avax);
+        _pushSupportedChain(__chainIds.polygon);
+        _pushSupportedChain(__chainIds.xdc);
+        _pushSupportedChain(__chainIds.katana);
 
         fillSupportedTestnetChainIds();
-        // testnets
         for (uint256 i = 0; i < supportedTestnetChainIds.length; i++) {
-            supportedChainIds.push(supportedTestnetChainIds[i]);
+            _pushSupportedChain(supportedTestnetChainIds[i]);
         }
     }
 
     function fillSupportedTestnetChainIds() internal {
-        supportedTestnetChainIds.push(__chainIds.holesky);
-        supportedTestnetChainIds.push(__chainIds.fraxtalTestnet);
-        supportedTestnetChainIds.push(__chainIds.sepolia);
-        supportedTestnetChainIds.push(__chainIds.morphTestnet);
-        supportedTestnetChainIds.push(__chainIds.hemiTestnet);
-        supportedTestnetChainIds.push(__chainIds.binanceTestnet);
+        _registerTestnetId(__chainIds.holesky);
+        _registerTestnetId(__chainIds.fraxtalTestnet);
+        _registerTestnetId(__chainIds.sepolia);
+        _registerTestnetId(__chainIds.morphTestnet);
+        _registerTestnetId(__chainIds.hemiTestnet);
+        _registerTestnetId(__chainIds.binanceTestnet);
     }
 
     function fillChainRecords() internal {
@@ -593,15 +604,13 @@ contract BaseData is Script {
     }
 
     function fillLzEidToChainId() public {
-        // Fill mapping from LayerZero EID to chain ID for all supported chains
+        // Read storage only — do not call `getData` here (that would eager-eval revert strings per chain).
         for (uint256 i = 0; i < supportedChainIds.length; i++) {
             uint256 chainId = supportedChainIds[i];
-
-            if (__chainIdToData[chainId].OFT_OWNER == address(0)) {
-                // skip if there is no owner here; it's not to be used.
-                continue;
-            }
-            uint32 eid = getData(chainId).LZ_EID;
+            Data storage d = __chainIdToData[chainId];
+            if (d.OFT_OWNER == address(0)) continue;
+            uint32 eid = d.LZ_EID;
+            require(eid != 0, "BaseData: LZ_EID zero in EID map fill");
             zlEIDToChainId[eid] = chainId;
         }
     }
@@ -613,7 +622,7 @@ contract BaseData is Script {
 
     function getChainIdFromEID(uint32 eid) internal view returns (uint256) {
         uint256 chainId = zlEIDToChainId[eid];
-        require(chainId != 0, string.concat("BaseData: unsupported EID: ", vm.toString(eid)));
+        require(chainId != 0, "BaseData: unsupported EID");
         return chainId;
     }
 
@@ -621,10 +630,7 @@ contract BaseData is Script {
         require(isSupportedChainId(chainId), "BaseData: unsupported chainId");
 
         _data = __chainIdToData[chainId];
-        require(
-            _data.OFT_OWNER != address(0),
-            string.concat("BaseData: OFT OWNER not set for chainId: ", vm.toString(chainId))
-        );
+        require(_data.OFT_OWNER != address(0), "BaseData: OFT_OWNER not set for chain");
         require(_data.TOKEN_ADMIN != address(0), "BaseData: TOKEN ADMIN not set");
         require(_data.PROXY_ADMIN != address(0), "BaseData: PROXY ADMIN not set");
         require(_data.LZ_ENDPOINT != address(0), "BaseData: LZ ENDPOINT not set");
@@ -643,21 +649,11 @@ contract BaseData is Script {
     }
 
     function isSupportedChainId(uint256 chainId) internal view returns (bool) {
-        for (uint256 i = 0; i < supportedChainIds.length; i++) {
-            if (chainId == supportedChainIds[i]) {
-                return true;
-            }
-        }
-        return false;
+        return __chainSupported[chainId];
     }
 
     function isTestnetChainId(uint256 chainId) internal view returns (bool) {
-        for (uint256 i = 0; i < supportedTestnetChainIds.length; i++) {
-            if (chainId == supportedTestnetChainIds[i]) {
-                return true;
-            }
-        }
-        return false;
+        return __chainIsTestnet[chainId];
     }
 
     function getMinDelay(uint256 chainId) internal view returns (uint256 minDelay) {

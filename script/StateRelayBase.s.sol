@@ -59,6 +59,13 @@ contract StateRelayBase is BaseData {
         return string.concat(vm.projectRoot(), "/deployments/", relayName, "-", relayVersion, ".json");
     }
 
+    /// @dev `initialize` sets Ownable to `relayOwner`; txs must be signed by the same key or `onlyOwner` reverts (Forge default caller is not `.owner`).
+    function _startBroadcast() internal {
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        require(vm.addr(pk) == relayOwner, "StateRelay: PRIVATE_KEY must match input .owner");
+        vm.startBroadcast(pk);
+    }
+
     function _pushUniqueChainId(uint256 chainId) private {
         for (uint256 i; i < chainIdsWithInput.length; i++) {
             if (chainIdsWithInput[i] == chainId) return;
@@ -74,6 +81,17 @@ contract StateRelayBase is BaseData {
         console.log("Loading input from %s", path);
         string memory json = vm.readFile(path);
 
+        // Relay INPUT uses `.senders`; deployment artifacts use `.chains.<chainId>.*` (see `saveDeployment`). First arg must be input JSON.
+        string[] memory sKeys;
+        try vm.parseJsonKeys(json, ".senders") returns (string[] memory keys) {
+            sKeys = keys;
+        } catch {
+            revert(
+                "StateRelay: first path must be relay INPUT (script/inputs/*.json with .senders), not deployments/*.json"
+            );
+        }
+        require(sKeys.length > 0, "StateRelay: input needs at least one entry under .senders");
+
         relayName = vm.parseJsonString(json, ".name");
         relayVersion = vm.parseJsonString(json, ".version");
         relayOwner = vm.parseJsonAddress(json, ".owner");
@@ -86,7 +104,6 @@ contract StateRelayBase is BaseData {
         _pushUniqueChainId(receiverChainId);
 
         delete senderLabels;
-        string[] memory sKeys = vm.parseJsonKeys(json, ".senders");
         for (uint256 i; i < sKeys.length; i++) {
             string memory label = sKeys[i];
             string memory sp = string.concat(".senders.", label);
@@ -121,29 +138,38 @@ contract StateRelayBase is BaseData {
         _readDeploymentFile(filePath);
     }
 
+    /// @dev `receiverChainId` and sender `chainId` come from **input** only. Deployment JSON supplies addresses under
+    ///      `.chains.<chainId>.stateStore`, `.stateReceiver`, `.senders.<label>.address`. Legacy top-level
+    ///      `.senderContracts.<label>.address` is still read if the per-chain path is missing.
     function _readDeploymentFile(string memory filePath) private {
         console.log("Loading deployment from %s", filePath);
         string memory json = vm.readFile(filePath);
 
-        require(vm.parseJsonUint(json, ".receiverChainId") == receiverChainId, "StateRelay: receiverChainId mismatch");
-
-        string[] memory chainKeys = vm.parseJsonKeys(json, ".chains");
-        for (uint256 i; i < chainKeys.length; i++) {
-            uint256 depChainId = vm.parseUint(chainKeys[i]);
-            string memory cpre = string.concat(".chains.", chainKeys[i]);
-            stateStoreOf[depChainId] = vm.parseJsonAddress(json, string.concat(cpre, ".stateStore"));
-            stateReceiverOf[depChainId] = vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver"));
+        for (uint256 i; i < chainIdsWithInput.length; i++) {
+            uint256 depChainId = chainIdsWithInput[i];
+            string memory cpre = string.concat(".chains.", vm.toString(depChainId));
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStore")) returns (address st) {
+                if (st != address(0)) stateStoreOf[depChainId] = st;
+            } catch {}
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver")) returns (address rc) {
+                if (rc != address(0)) stateReceiverOf[depChainId] = rc;
+            } catch {}
         }
 
-        try vm.parseJsonKeys(json, ".senderContracts") returns (string[] memory sndKeys) {
-            for (uint256 i; i < sndKeys.length; i++) {
-                string memory label = sndKeys[i];
-                string memory sp = string.concat(".senderContracts.", label);
-                uint256 sChain = vm.parseJsonUint(json, string.concat(sp, ".chainId"));
-                address sAddr = vm.parseJsonAddress(json, string.concat(sp, ".address"));
-                stateSenderOf[senderSlot(sChain, label)] = sAddr;
+        for (uint256 i; i < senderLabels.length; i++) {
+            string memory label = senderLabels[i];
+            SenderInput memory s = senderByLabel[label];
+            string memory byChain =
+                string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".address");
+            try vm.parseJsonAddress(json, byChain) returns (address sAddr) {
+                if (sAddr != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = sAddr;
+            } catch {
+                string memory legacy = string.concat(".senderContracts.", label, ".address");
+                try vm.parseJsonAddress(json, legacy) returns (address sAddr) {
+                    if (sAddr != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = sAddr;
+                } catch {}
             }
-        } catch {}
+        }
     }
 
     /// @notice Same as `loadDeployment` but reverts if the deployment JSON is missing (for configure / transfer steps).
@@ -153,26 +179,21 @@ contract StateRelayBase is BaseData {
         _readDeploymentFile(filePath);
     }
 
-    function runDeployForChain() internal {
+    /// @dev Step 1 — deploy **StateSender(s)** on each source chain RPC (relay / source side).
+    function deploySenders() internal {
         uint256 currentChainId = block.chainid;
         require(isSupportedChainId(currentChainId), "StateRelay: rpc chain not in BaseData");
 
-        bool inScope;
-        if (currentChainId == receiverChainId) inScope = true;
+        bool hasSender;
         for (uint256 i; i < senderLabels.length; i++) {
             if (senderByLabel[senderLabels[i]].chainId == currentChainId) {
-                inScope = true;
+                hasSender = true;
                 break;
             }
         }
-        require(inScope, "StateRelay: this chain not used by this input");
+        require(hasSender, "StateRelay: no StateSender for this chain in input; use source-chain RPC");
 
         address lzEndpoint = getData(currentChainId).LZ_ENDPOINT;
-
-        if (currentChainId == receiverChainId) {
-            _deployDestination(lzEndpoint);
-        }
-
         for (uint256 i; i < senderLabels.length; i++) {
             string memory label = senderLabels[i];
             SenderInput memory s = senderByLabel[label];
@@ -180,14 +201,22 @@ contract StateRelayBase is BaseData {
                 _deploySender(label, s, lzEndpoint);
             }
         }
+        saveDeployment();
+    }
 
+    /// @dev Step 2 — deploy **StateStore + StateReceiver** on `receiverChainId` RPC only.
+    function deployDestination() internal {
+        uint256 currentChainId = block.chainid;
+        require(isSupportedChainId(currentChainId), "StateRelay: rpc chain not in BaseData");
+        require(currentChainId == receiverChainId, "StateRelay: destination deploy only on receiver chain RPC");
+        _deployDestination(getData(currentChainId).LZ_ENDPOINT);
         saveDeployment();
     }
 
     function _deployDestination(address lzEndpoint) internal {
         uint256 dstChainId = block.chainid;
         if (!isContract(stateStoreOf[dstChainId])) {
-            vm.startBroadcast();
+            _startBroadcast();
             StateStore impl = new StateStore();
             bytes memory initStore = abi.encodeCall(StateStore.initialize, (relayOwner, new address[](0)));
             ERC1967Proxy storeProxy = new ERC1967Proxy(address(impl), initStore);
@@ -199,7 +228,7 @@ contract StateRelayBase is BaseData {
         }
 
         if (!isContract(stateReceiverOf[dstChainId])) {
-            vm.startBroadcast();
+            _startBroadcast();
             StateReceiver recvImpl = new StateReceiver(lzEndpoint);
             bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (relayOwner, stateStoreOf[dstChainId]));
             ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
@@ -212,7 +241,7 @@ contract StateRelayBase is BaseData {
 
         StateStore store = StateStore(stateStoreOf[dstChainId]);
         if (!store.isWriter(stateReceiverOf[dstChainId])) {
-            vm.startBroadcast();
+            _startBroadcast();
             store.setWriter(stateReceiverOf[dstChainId], true);
             vm.stopBroadcast();
             console.log("Granted StateReceiver writer on StateStore");
@@ -228,7 +257,7 @@ contract StateRelayBase is BaseData {
             return;
         }
 
-        vm.startBroadcast();
+        _startBroadcast();
         StateSender impl = new StateSender(lzEndpoint);
         bytes memory init = abi.encodeCall(
             StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
@@ -241,41 +270,50 @@ contract StateRelayBase is BaseData {
         console.logAddress(address(proxy));
     }
 
+    /// @dev Merges into the deployment file on disk: call `loadDeployment()` first so in-memory maps include prior
+    ///      JSON, then this only overwrites paths for non-zero addresses we know about. Other keys stay untouched.
     function saveDeployment() internal {
-        string memory root = "stateRelayDeploy";
-        root = vm.serializeUint(root, "receiverChainId", receiverChainId);
+        string memory path = deploymentFilePath();
+        if (!vm.isFile(path)) {
+            vm.writeJson("{\"chains\":{}}", path);
+        }
 
-        string memory chainsAcc = "chainsAcc";
         for (uint256 i; i < chainIdsWithInput.length; i++) {
             uint256 chainId = chainIdsWithInput[i];
             string memory chainIdStr = vm.toString(chainId);
-            string memory chainObj = string.concat("chain_", chainIdStr);
-            chainObj = vm.serializeAddress(chainObj, "stateStore", stateStoreOf[chainId]);
-            chainObj = vm.serializeAddress(chainObj, "stateReceiver", stateReceiverOf[chainId]);
-            chainsAcc = vm.serializeString(chainsAcc, chainIdStr, chainObj);
-        }
-        root = vm.serializeString(root, "chains", chainsAcc);
 
-        string memory sndAcc = "sndAcc";
-        bool anySender;
-        for (uint256 i; i < senderLabels.length; i++) {
-            string memory label = senderLabels[i];
-            SenderInput memory s = senderByLabel[label];
-            address deployed = stateSenderOf[senderSlot(s.chainId, label)];
-            if (deployed == address(0)) continue;
+            if (stateStoreOf[chainId] != address(0)) {
+                vm.writeJson(
+                    string.concat('"', vm.toString(stateStoreOf[chainId]), '"'),
+                    path,
+                    string.concat(".chains.", chainIdStr, ".stateStore")
+                );
+            }
+            if (stateReceiverOf[chainId] != address(0)) {
+                vm.writeJson(
+                    string.concat('"', vm.toString(stateReceiverOf[chainId]), '"'),
+                    path,
+                    string.concat(".chains.", chainIdStr, ".stateReceiver")
+                );
+            }
 
-            string memory one = string.concat("snd1_", label);
-            one = vm.serializeUint(one, "chainId", s.chainId);
-            one = vm.serializeAddress(one, "address", deployed);
-            sndAcc = vm.serializeString(sndAcc, label, one);
-            anySender = true;
-        }
-        if (!anySender) {
-            sndAcc = vm.serializeJson("sndAccEmpty", "{}");
-        }
-        root = vm.serializeString(root, "senderContracts", sndAcc);
+            for (uint256 j; j < senderLabels.length; j++) {
+                string memory label = senderLabels[j];
+                SenderInput memory s = senderByLabel[label];
+                if (s.chainId != chainId) continue;
+                address deployed = stateSenderOf[senderSlot(chainId, label)];
+                if (deployed == address(0)) continue;
 
-        vm.writeJson(root, deploymentFilePath());
-        console.log("Wrote deployment to %s", deploymentFilePath());
+                string memory objKey = string.concat("sndW_", chainIdStr, "_", label);
+                string memory senderObj = vm.serializeAddress(objKey, "address", deployed);
+                vm.writeJson(
+                    senderObj,
+                    path,
+                    string.concat(".chains.", chainIdStr, ".senders.", label)
+                );
+            }
+        }
+
+        console.log("Wrote deployment to %s", path);
     }
 }

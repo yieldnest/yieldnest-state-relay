@@ -8,11 +8,10 @@ import {StateRelayBase} from "../StateRelayBase.s.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @notice Step 3: transfer Ownable on StateStore, StateReceiver, and StateSender(s) on this chain to `BaseData` `OFT_OWNER` (mirrors `3_TransferOFTOwnership`).
+/// @notice **Step 5** (optional) — transfer `Ownable` on StateStore, StateReceiver, and StateSender(s) on **this** chain to `BaseData` `OFT_OWNER`.
 ///
-/// forge script script/deploy/3_TransferStateRelayOwnership.s.sol:TransferStateRelayOwnership \
-///   --sig "run(string,string)" script/inputs/your-relay.json "" \
-///   --rpc-url $RPC_URL --broadcast
+/// Run once per chain; use `$RPC_MAINNET` or `$RPC_ARBITRUM` to match `block.chainid`.
+/// forge script --sig "run(string,string)" --rpc-url "$RPC_MAINNET" --broadcast --with-gas-price 1gwei script/deploy/5_TransferStateRelayOwnership.s.sol:TransferStateRelayOwnership script/inputs/anvil-mainnet-arbitrum.json ""
 contract TransferStateRelayOwnership is StateRelayBase {
     error NotOwner();
 
@@ -23,13 +22,15 @@ contract TransferStateRelayOwnership is StateRelayBase {
 
         address nextOwner = getData(block.chainid).OFT_OWNER;
         uint256 cid = block.chainid;
+        uint256 pk = vm.envUint("PRIVATE_KEY");
+        require(vm.addr(pk) == relayOwner, "StateRelay: PRIVATE_KEY must match input .owner");
 
         address st = stateStoreOf[cid];
         if (st != address(0)) {
             Ownable o = Ownable(st);
             if (o.owner() != nextOwner) {
-                if (o.owner() != msg.sender) revert NotOwner();
-                vm.broadcast();
+                if (o.owner() != relayOwner) revert NotOwner();
+                vm.broadcast(pk);
                 o.transferOwnership(nextOwner);
                 console.log("StateStore ownership -> OFT_OWNER");
             }
@@ -39,8 +40,8 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (rc != address(0)) {
             Ownable o = Ownable(rc);
             if (o.owner() != nextOwner) {
-                if (o.owner() != msg.sender) revert NotOwner();
-                vm.broadcast();
+                if (o.owner() != relayOwner) revert NotOwner();
+                vm.broadcast(pk);
                 o.transferOwnership(nextOwner);
                 console.log("StateReceiver ownership -> OFT_OWNER");
             }
@@ -53,8 +54,8 @@ contract TransferStateRelayOwnership is StateRelayBase {
             if (snd == address(0)) continue;
             Ownable o = Ownable(snd);
             if (o.owner() != nextOwner) {
-                if (o.owner() != msg.sender) revert NotOwner();
-                vm.broadcast();
+                if (o.owner() != relayOwner) revert NotOwner();
+                vm.broadcast(pk);
                 o.transferOwnership(nextOwner);
                 console.log("StateSender [%s] ownership -> OFT_OWNER", label);
             }
