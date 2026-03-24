@@ -19,8 +19,7 @@ abstract contract StateRelayForkConstants {
     address internal constant YNETHX_MAINNET = 0x657d9ABA1DBb59e53f9F3eCAA878447dCfC96dCb;
 
     uint256 internal constant ONE_SHARE = 1e18;
-    bytes internal constant CONVERT_TO_ASSETS_CALLDATA =
-        abi.encodeCall(IERC4626.convertToAssets, (ONE_SHARE));
+    bytes internal constant CONVERT_TO_ASSETS_CALLDATA = abi.encodeCall(IERC4626.convertToAssets, (ONE_SHARE));
 }
 
 /**
@@ -155,8 +154,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         setUpEndpoints(1, LibraryType.UltraLightNode);
 
         StateStore storeImpl = new StateStore();
-        bytes memory storeInit =
-            abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
+        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
         stateStore = StateStore(address(storeProxy));
 

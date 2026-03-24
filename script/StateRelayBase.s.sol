@@ -159,8 +159,7 @@ contract StateRelayBase is BaseData {
         for (uint256 i; i < senderLabels.length; i++) {
             string memory label = senderLabels[i];
             SenderInput memory s = senderByLabel[label];
-            string memory byChain =
-                string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".address");
+            string memory byChain = string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".address");
             try vm.parseJsonAddress(json, byChain) returns (address sAddr) {
                 if (sAddr != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = sAddr;
             } catch {
@@ -306,11 +305,7 @@ contract StateRelayBase is BaseData {
 
                 string memory objKey = string.concat("sndW_", chainIdStr, "_", label);
                 string memory senderObj = vm.serializeAddress(objKey, "address", deployed);
-                vm.writeJson(
-                    senderObj,
-                    path,
-                    string.concat(".chains.", chainIdStr, ".senders.", label)
-                );
+                vm.writeJson(senderObj, path, string.concat(".chains.", chainIdStr, ".senders.", label));
             }
         }
 
