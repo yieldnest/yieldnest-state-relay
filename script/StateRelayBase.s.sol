@@ -29,7 +29,6 @@ contract StateRelayBase is BaseData {
     string internal relayVersion;
     address internal relayOwner;
     uint256 internal receiverChainId;
-    uint256 internal maxValueSize;
 
     uint256[] internal chainIdsWithInput;
 
@@ -79,7 +78,6 @@ contract StateRelayBase is BaseData {
         relayVersion = vm.parseJsonString(json, ".version");
         relayOwner = vm.parseJsonAddress(json, ".owner");
         receiverChainId = vm.parseJsonUint(json, ".receiverChainId");
-        maxValueSize = vm.parseJsonUint(json, ".dst.maxValueSize");
         require(relayOwner != address(0), "StateRelay: owner required");
         require(bytes(relayName).length > 0, "StateRelay: name required");
         require(isSupportedChainId(receiverChainId), "StateRelay: receiverChainId not in BaseData");
@@ -191,7 +189,7 @@ contract StateRelayBase is BaseData {
         if (!isContract(stateStoreOf[dstChainId])) {
             vm.startBroadcast();
             StateStore impl = new StateStore();
-            bytes memory initStore = abi.encodeCall(StateStore.initialize, (relayOwner, maxValueSize, new address[](0)));
+            bytes memory initStore = abi.encodeCall(StateStore.initialize, (relayOwner, new address[](0)));
             ERC1967Proxy storeProxy = new ERC1967Proxy(address(impl), initStore);
             vm.stopBroadcast();
             stateStoreOf[dstChainId] = address(storeProxy);
@@ -233,8 +231,7 @@ contract StateRelayBase is BaseData {
         vm.startBroadcast();
         StateSender impl = new StateSender(lzEndpoint);
         bytes memory init = abi.encodeCall(
-            StateSender.initialize,
-            (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
+            StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();

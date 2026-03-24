@@ -17,7 +17,7 @@ contract TestRateAdapterTest is Test {
 
     function setUp() public {
         StateStore impl = new StateStore();
-        bytes memory initData = abi.encodeCall(StateStore.initialize, (address(this), 1024, new address[](0)));
+        bytes memory initData = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateStore = StateStore(address(proxy));
         stateStore.setWriter(address(this), true);

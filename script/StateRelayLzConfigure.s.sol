@@ -41,7 +41,11 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
 
     /// @return remoteChainIds source chains that have a StateSender (excluding co-located receiver+sender same chain).
     /// @return peerForRemote OApp address on each source chain, bytes32-encoded.
-    function _receiverRemotePeers() internal view returns (uint256[] memory remoteChainIds, bytes32[] memory peerForRemote) {
+    function _receiverRemotePeers()
+        internal
+        view
+        returns (uint256[] memory remoteChainIds, bytes32[] memory peerForRemote)
+    {
         _requireAtMostOneSenderPerSourceChain();
         uint256 n;
         for (uint256 i; i < senderLabels.length; i++) {
@@ -124,7 +128,9 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         }
     }
 
-    function _configurePeersSenderToReceiver(IOAppCore oapp, uint256[] memory dstChainIds, bytes32 receiverPeer) internal {
+    function _configurePeersSenderToReceiver(IOAppCore oapp, uint256[] memory dstChainIds, bytes32 receiverPeer)
+        internal
+    {
         console.log("Configuring StateSender peer -> receiver...");
         for (uint256 i; i < dstChainIds.length; i++) {
             uint32 dstEid = getEID(dstChainIds[i]);
@@ -216,7 +222,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
 
             if (
                 keccak256(lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, dstEid, CONFIG_TYPE_ULN))
-                    == keccak256(abi.encode(ulnConfig))
+                        == keccak256(abi.encode(ulnConfig))
                     && keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, dstEid, CONFIG_TYPE_ULN))
                         == keccak256(abi.encode(ulnConfig))
             ) {

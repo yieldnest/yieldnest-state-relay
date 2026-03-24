@@ -488,7 +488,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: address(0),
             LZ_DVN: 0xC1868e054425D378095A003EcbA3823a5D0135C9,
             NETHERMIND_DVN: 0xF49d162484290EAeAd7bb8C2c7E3a6f8f52e32d6, //no listed nethermind testnet dvn, using
-                // LZ's dvn
+            // LZ's dvn
             LZ_EXECUTOR: 0x701f3927871EfcEa1235dB722f9E608aE120d243,
             LZ_EID: 40338
         });
@@ -586,8 +586,7 @@ contract BaseData is Script {
         chainRecords[__chainIds.sepolia] = ChainRecord({chainId: __chainIds.sepolia, name: "Sepolia"});
         chainRecords[__chainIds.fraxtalTestnet] =
             ChainRecord({chainId: __chainIds.fraxtalTestnet, name: "Fraxtal Testnet"});
-        chainRecords[__chainIds.morphTestnet] =
-            ChainRecord({chainId: __chainIds.morphTestnet, name: "Morph Testnet"});
+        chainRecords[__chainIds.morphTestnet] = ChainRecord({chainId: __chainIds.morphTestnet, name: "Morph Testnet"});
         chainRecords[__chainIds.hemiTestnet] = ChainRecord({chainId: __chainIds.hemiTestnet, name: "Hemi Testnet"});
         chainRecords[__chainIds.binanceTestnet] =
             ChainRecord({chainId: __chainIds.binanceTestnet, name: "Binance Testnet"});

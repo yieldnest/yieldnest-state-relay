@@ -5,8 +5,6 @@ import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oap
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
 import {StateStore} from "./StateStore.sol";
 
-import {KeyDerivation} from "./KeyDerivation.sol";
-
 /**
  * @title StateReceiver
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).

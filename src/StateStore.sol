@@ -17,7 +17,6 @@ contract StateStore is Initializable, OwnableUpgradeable {
 
     mapping(bytes32 => Entry) private _entries;
     mapping(address => bool) private _writers;
-    uint256 public maxValueSize;
 
     event WriterSet(address indexed writer, bool allowed);
     event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
@@ -27,9 +26,8 @@ contract StateStore is Initializable, OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address owner_, uint256 maxValueSize_, address[] memory writers_) external initializer {
+    function initialize(address owner_, address[] memory writers_) external initializer {
         __Ownable_init(owner_);
-        maxValueSize = maxValueSize_;
         for (uint256 i = 0; i < writers_.length; i++) {
             _writers[writers_[i]] = true;
         }
@@ -46,7 +44,6 @@ contract StateStore is Initializable, OwnableUpgradeable {
 
     function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
         require(isWriter(msg.sender), "StateStore: not writer");
-        require(value.length <= maxValueSize, "StateStore: value too large");
         Entry storage e = _entries[key];
         require(srcTimestamp > e.srcTimestamp, "StateStore: stale");
         e.value = value;
