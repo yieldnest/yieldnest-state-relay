@@ -2,7 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
-import {StateSender} from "src/StateSender.sol";
+import {StateSenderStatic} from "src/StateSenderStatic.sol";
 import {StateReceiver} from "src/StateReceiver.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
@@ -32,7 +32,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     uint32 internal constant SRC_EID = 1;
     uint32 internal constant DST_EID = 2;
 
-    StateSender internal stateSender;
+    StateSenderStatic internal stateSender;
     MessageSink internal messageSink;
 
     /// @dev ynETHx vault on the forked chain (mainnet only in this base).
@@ -46,12 +46,13 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         TestHelperOz5.setUp();
         setUpEndpoints(2, LibraryType.UltraLightNode);
 
-        StateSender impl = new StateSender(address(endpoints[SRC_EID]));
+        StateSenderStatic impl = new StateSenderStatic(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize, (address(this), ynEthx_, address(this), address(0), CONVERT_TO_ASSETS_CALLDATA, 1)
+            StateSenderStatic.initialize,
+            (address(this), ynEthx_, address(this), address(0), CONVERT_TO_ASSETS_CALLDATA, 1)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
-        stateSender = StateSender(address(proxy));
+        stateSender = StateSenderStatic(address(proxy));
 
         address sinkAddr =
             _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
@@ -118,7 +119,7 @@ contract StateRelayForkMainnetTest is StateRelayForkTestBase {
  * @notice Reads `convertToAssets(1e18)` from **mainnet** ynETHx, then applies it on an **Arbitrum** fork via
  *         StateStore + StateReceiver (harness simulates LZ payload). Models production: L1 rate → L2 store.
  * @dev Wire format to the receiver is `abi.encode(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp)`
- *      (see `StateReceiver._decodePayload`), not the `StateSender` OApp blob (that path is covered on mainnet + MessageSink).
+ *      (see `StateReceiver._decodePayload`), not the `StateSenderStatic` OApp blob (that path is covered on mainnet + MessageSink).
  */
 contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayForkConstants {
     uint32 internal constant ARB_EID = 1;

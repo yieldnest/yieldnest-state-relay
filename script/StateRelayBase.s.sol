@@ -7,7 +7,8 @@ import {console} from "forge-std/console.sol";
 import {BaseData} from "./BaseData.s.sol";
 
 import {StateStore} from "../src/StateStore.sol";
-import {StateSender} from "../src/StateSender.sol";
+import {StateSenderStatic} from "../src/StateSenderStatic.sol";
+import {StateSenderDynamic} from "../src/StateSenderDynamic.sol";
 import {StateReceiver} from "../src/StateReceiver.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -178,8 +179,19 @@ contract StateRelayBase is BaseData {
         _readDeploymentFile(filePath);
     }
 
-    /// @dev Step 1 — deploy **StateSender(s)** on each source chain RPC (relay / source side).
-    function deploySenders() internal {
+    /// @dev Step 1 — deploy **StateSenderStatic** (fixed init calldata) on each source chain RPC.
+    function deploySendersStatic() internal {
+        _deploySendersForChain(_deploySenderStatic);
+    }
+
+    /// @dev Step 1 — deploy **StateSenderDynamic** (calldata per send) on each source chain RPC. Input `callData` is ignored at init.
+    function deploySendersDynamic() internal {
+        _deploySendersForChain(_deploySenderDynamic);
+    }
+
+    function _deploySendersForChain(
+        function(string memory, SenderInput memory, address) internal deployOne
+    ) private {
         uint256 currentChainId = block.chainid;
         require(isSupportedChainId(currentChainId), "StateRelay: rpc chain not in BaseData");
 
@@ -197,7 +209,7 @@ contract StateRelayBase is BaseData {
             string memory label = senderLabels[i];
             SenderInput memory s = senderByLabel[label];
             if (s.chainId == currentChainId) {
-                _deploySender(label, s, lzEndpoint);
+                deployOne(label, s, lzEndpoint);
             }
         }
         saveDeployment();
@@ -247,7 +259,7 @@ contract StateRelayBase is BaseData {
         }
     }
 
-    function _deploySender(string memory label, SenderInput memory s, address lzEndpoint) internal {
+    function _deploySenderStatic(string memory label, SenderInput memory s, address lzEndpoint) internal {
         bytes32 slot = senderSlot(block.chainid, label);
         address existing = stateSenderOf[slot];
         if (isContract(existing)) {
@@ -257,15 +269,39 @@ contract StateRelayBase is BaseData {
         }
 
         _startBroadcast();
-        StateSender impl = new StateSender(lzEndpoint);
+        StateSenderStatic impl = new StateSenderStatic(lzEndpoint);
         bytes memory init = abi.encodeCall(
-            StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
+            StateSenderStatic.initialize,
+            (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();
 
         stateSenderOf[slot] = address(proxy);
-        console.log("StateSender [%s] proxy:", label);
+        console.log("StateSenderStatic [%s] proxy:", label);
+        console.logAddress(address(proxy));
+    }
+
+    function _deploySenderDynamic(string memory label, SenderInput memory s, address lzEndpoint) internal {
+        bytes32 slot = senderSlot(block.chainid, label);
+        address existing = stateSenderOf[slot];
+        if (isContract(existing)) {
+            console.log("StateSender [%s] already at:", label);
+            console.logAddress(existing);
+            return;
+        }
+
+        _startBroadcast();
+        StateSenderDynamic impl = new StateSenderDynamic(lzEndpoint);
+        bytes memory init = abi.encodeCall(
+            StateSenderDynamic.initialize,
+            (relayOwner, s.target, s.refundAddress, s.lzToken, s.protocolVersion)
+        );
+        ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
+        vm.stopBroadcast();
+
+        stateSenderOf[slot] = address(proxy);
+        console.log("StateSenderDynamic [%s] proxy:", label);
         console.logAddress(address(proxy));
     }
 

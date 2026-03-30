@@ -2,7 +2,8 @@
 pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
-import {StateSender} from "src/StateSender.sol";
+import {StateSenderStatic} from "src/StateSenderStatic.sol";
+import {StateSenderDynamic} from "src/StateSenderDynamic.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MockRateTarget} from "test/mocks/MockRateTarget.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
@@ -14,7 +15,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
     uint32 constant SRC_EID = 1;
     uint32 constant DST_EID = 2;
 
-    StateSender public stateSender;
+    StateSenderStatic public stateSender;
     MessageSink public messageSink;
     MockRateTarget public mockTarget;
 
@@ -25,10 +26,10 @@ contract StateSenderTest is Test, TestHelperOz5 {
         mockTarget = new MockRateTarget();
         mockTarget.setRate(1e18);
 
-        // StateSender is upgradeable: deploy impl + proxy, initialize via proxy
-        StateSender impl = new StateSender(address(endpoints[SRC_EID]));
+        // StateSenderStatic is upgradeable: deploy impl + proxy, initialize via proxy
+        StateSenderStatic impl = new StateSenderStatic(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize,
+            StateSenderStatic.initialize,
             (
                 address(this),
                 address(mockTarget),
@@ -39,7 +40,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
             )
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
-        stateSender = StateSender(address(proxy));
+        stateSender = StateSenderStatic(address(proxy));
 
         // MessageSink: (endpoint, delegate)
         address sinkAddr =
@@ -86,9 +87,9 @@ contract StateSenderTest is Test, TestHelperOz5 {
 
     function test_staticcallFailure_reverts() public {
         // Use a contract that reverts on getRate() so staticcall fails (0xdead has no code and returns success)
-        StateSender badImpl = new StateSender(address(endpoints[SRC_EID]));
+        StateSenderStatic badImpl = new StateSenderStatic(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize,
+            StateSenderStatic.initialize,
             (
                 address(this),
                 address(badImpl),
@@ -99,7 +100,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
             )
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
-        StateSender badSender = StateSender(address(badProxy));
+        StateSenderStatic badSender = StateSenderStatic(address(badProxy));
         vm.expectRevert("StateSender: staticcall failed");
         badSender.quoteSendState(DST_EID, false);
     }
@@ -114,5 +115,27 @@ contract StateSenderTest is Test, TestHelperOz5 {
             block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
         assertEq(key, expectedKey);
+    }
+
+    function test_dynamic_sendState_sameAsFixed_whenCallDataMatches() public {
+        bytes memory cd = abi.encodeWithSelector(MockRateTarget.getRate.selector);
+        StateSenderDynamic dynImpl = new StateSenderDynamic(address(endpoints[SRC_EID]));
+        bytes memory dynInit = abi.encodeCall(
+            StateSenderDynamic.initialize,
+            (address(this), address(mockTarget), address(this), address(0), 1)
+        );
+        ERC1967Proxy dynProxy = new ERC1967Proxy(address(dynImpl), dynInit);
+        StateSenderDynamic dynamic = StateSenderDynamic(payable(address(dynProxy)));
+
+        address sinkAddr =
+            _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
+        wireOApps(toAddressArray(address(dynProxy), sinkAddr));
+
+        MessagingFee memory fee = dynamic.quoteSendState(DST_EID, false, cd);
+        dynamic.sendState{value: fee.nativeFee}(DST_EID, false, cd);
+
+        verifyPackets(DST_EID, addressToBytes32(sinkAddr));
+        (, bytes32 key,,) = abi.decode(MessageSink(sinkAddr).lastMessage(), (uint256, bytes32, bytes, uint256));
+        assertEq(key, KeyDerivation.deriveKey(block.chainid, address(mockTarget), cd));
     }
 }
