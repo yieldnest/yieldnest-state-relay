@@ -12,13 +12,10 @@ contract StateSenderDynamic is StateSenderBase {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) StateSenderBase(_endpoint) {}
 
-    function initialize(
-        address _owner,
-        address _target,
-        address _refundAddress,
-        address _lzToken,
-        uint8 _version
-    ) external reinitializer(1) {
+    function initialize(address _owner, address _target, address _refundAddress, address _lzToken, uint8 _version)
+        external
+        reinitializer(1)
+    {
         __StateSenderBase_init(_owner, _target, _refundAddress, _lzToken, _version);
     }
 

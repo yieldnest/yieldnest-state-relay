@@ -189,9 +189,7 @@ contract StateRelayBase is BaseData {
         _deploySendersForChain(_deploySenderDynamic);
     }
 
-    function _deploySendersForChain(
-        function(string memory, SenderInput memory, address) internal deployOne
-    ) private {
+    function _deploySendersForChain(function(string memory, SenderInput memory, address) internal deployOne) private {
         uint256 currentChainId = block.chainid;
         require(isSupportedChainId(currentChainId), "StateRelay: rpc chain not in BaseData");
 
@@ -294,8 +292,7 @@ contract StateRelayBase is BaseData {
         _startBroadcast();
         StateSenderDynamic impl = new StateSenderDynamic(lzEndpoint);
         bytes memory init = abi.encodeCall(
-            StateSenderDynamic.initialize,
-            (relayOwner, s.target, s.refundAddress, s.lzToken, s.protocolVersion)
+            StateSenderDynamic.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();

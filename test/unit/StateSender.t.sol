@@ -121,8 +121,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         bytes memory cd = abi.encodeWithSelector(MockRateTarget.getRate.selector);
         StateSenderDynamic dynImpl = new StateSenderDynamic(address(endpoints[SRC_EID]));
         bytes memory dynInit = abi.encodeCall(
-            StateSenderDynamic.initialize,
-            (address(this), address(mockTarget), address(this), address(0), 1)
+            StateSenderDynamic.initialize, (address(this), address(mockTarget), address(this), address(0), 1)
         );
         ERC1967Proxy dynProxy = new ERC1967Proxy(address(dynImpl), dynInit);
         StateSenderDynamic dynamic = StateSenderDynamic(payable(address(dynProxy)));
