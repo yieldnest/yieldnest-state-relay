@@ -18,6 +18,10 @@ abstract contract StateSenderBase is OAppUpgradeable {
     address public refundAddress;
     IERC20 public lzToken;
     uint8 public version;
+    /**
+     * @dev Reserved storage space to allow for layout changes in future upgrades.
+     */
+    uint256[46] private __gap;
 
     event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
     event TargetSet(address target);
@@ -104,7 +108,7 @@ abstract contract StateSenderBase is OAppUpgradeable {
                 uint256 balanceDifference = fee.lzTokenFee - balance;
                 SafeERC20.safeTransferFrom(lzToken, msg.sender, address(this), balanceDifference);
             }
-            SafeERC20.safeIncreaseAllowance(lzToken, address(endpoint), fee.lzTokenFee);
+            SafeERC20.forceApprove(lzToken, address(endpoint), fee.lzTokenFee);
             _lzSend(dstEid_, message, options, fee, refundAddress);
         } else {
             require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
