@@ -8,26 +8,20 @@ import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppRec
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
+import {IStateSenderBase} from "./interfaces/IStateSenderBase.sol";
 
 /**
  * @title StateSenderBase
- * @notice Abstract upgradeable OApp: staticcall + LayerZero send. Call data is supplied per operation by concrete contracts.
+ * @notice Abstract upgradeable OApp: staticcall + LayerZero send. `StateSenderStatic` stores target/calldata; `StateSenderDynamic` passes them per call.
  */
-abstract contract StateSenderBase is OAppUpgradeable {
-    address public target;
+abstract contract StateSenderBase is OAppUpgradeable, IStateSenderBase {
     address public refundAddress;
     IERC20 public lzToken;
     uint8 public version;
     /**
      * @dev Reserved storage space to allow for layout changes in future upgrades.
      */
-    uint256[46] private __gap;
-
-    event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
-    event TargetSet(address target);
-    event RefundAddressSet(address refundAddress);
-    event LzTokenSet(address lzToken);
-    event VersionSet(uint8 version);
+    uint256[47] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -36,22 +30,15 @@ abstract contract StateSenderBase is OAppUpgradeable {
 
     function __StateSenderBase_init(
         address _owner,
-        address _target,
         address _refundAddress,
         address _lzToken,
         uint8 _version
     ) internal onlyInitializing {
         __Ownable_init(_owner);
         __OApp_init(_owner);
-        target = _target;
         refundAddress = _refundAddress;
         lzToken = IERC20(_lzToken);
         version = _version;
-    }
-
-    function setTarget(address _target) external onlyOwner {
-        target = _target;
-        emit TargetSet(_target);
     }
 
     function setRefundAddress(address _refundAddress) external onlyOwner {
@@ -73,8 +60,9 @@ abstract contract StateSenderBase is OAppUpgradeable {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
     }
 
-    function _staticCallState(bytes memory callData_) internal view returns (bytes memory) {
-        (bool success, bytes memory data) = target.staticcall(callData_);
+    function _staticCallState(address target_, bytes memory callData_) internal view returns (bytes memory) {
+        require(target_ != address(0), "StateSender: target required");
+        (bool success, bytes memory data) = target_.staticcall(callData_);
         require(success, "StateSender: staticcall failed");
         return data;
     }
@@ -83,21 +71,21 @@ abstract contract StateSenderBase is OAppUpgradeable {
         return abi.encode(block.chainid, key, stateData, block.timestamp);
     }
 
-    function _quoteSendState(uint32 dstEid_, bool payInLzToken_, bytes memory callData_)
+    function _quoteSendState(uint32 dstEid_, bool payInLzToken_, address target_, bytes memory callData_)
         internal
         view
         virtual
         returns (MessagingFee memory fee)
     {
-        bytes memory stateData = _staticCallState(callData_);
-        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData_);
+        bytes memory stateData = _staticCallState(target_, callData_);
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, target_, callData_);
         bytes memory message = _createMessage(key, stateData);
         return _quote(dstEid_, message, _getDefaultOptions(), payInLzToken_);
     }
 
-    function _sendState(uint32 dstEid_, bool payInLzToken_, bytes memory callData_) internal virtual {
-        bytes memory stateData = _staticCallState(callData_);
-        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData_);
+    function _sendState(uint32 dstEid_, bool payInLzToken_, address target_, bytes memory callData_) internal virtual {
+        bytes memory stateData = _staticCallState(target_, callData_);
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, target_, callData_);
         bytes memory message = _createMessage(key, stateData);
         bytes memory options = _getDefaultOptions();
         MessagingFee memory fee = _quote(dstEid_, message, options, payInLzToken_);

@@ -1,0 +1,16 @@
+{
+  "name": "anvil-default",
+  "version": "v0",
+  "owner": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "receiverChainId": 31337,
+  "senders": {
+    "local": {
+      "chainId": 31337,
+      "target": "0x0000000000000000000000000000000000000001",
+      "callData": "0x00",
+      "refundAddress": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+      "lzToken": "0x0000000000000000000000000000000000000000",
+      "protocolVersion": 1
+    }
+  }
+}

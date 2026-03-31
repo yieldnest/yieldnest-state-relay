@@ -11,6 +11,7 @@ import {StateSenderStatic} from "../src/StateSenderStatic.sol";
 import {StateSenderDynamic} from "../src/StateSenderDynamic.sol";
 import {StateReceiver} from "../src/StateReceiver.sol";
 
+import {MockLayerZeroEndpointV2} from "./mocks/MockLayerZeroEndpointV2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /// @notice Shared input, deployment JSON, and deploy steps for state relay scripts.
@@ -179,6 +180,21 @@ contract StateRelayBase is BaseData {
         _readDeploymentFile(filePath);
     }
 
+    /// @dev On vanilla Anvil (`anvilLocalChainId`) the LayerZero address from `BaseData` has no code; deploy a stub so OApp `initialize` succeeds.
+    function _ensureContractLzEndpoint(address configured) internal returns (address) {
+        if (configured.code.length > 0) return configured;
+        require(
+            block.chainid == anvilLocalChainId(),
+            "StateRelay: LZ_ENDPOINT has no code (fork this chain or use Anvil default chain id)"
+        );
+        _startBroadcast();
+        address mock = address(new MockLayerZeroEndpointV2());
+        vm.stopBroadcast();
+        console.log("MockLayerZeroEndpointV2 (local init only):");
+        console.logAddress(mock);
+        return mock;
+    }
+
     /// @dev Step 1 — deploy **StateSenderStatic** (fixed init calldata) on each source chain RPC.
     function deploySendersStatic() internal {
         _deploySendersForChain(_deploySenderStatic);
@@ -202,7 +218,7 @@ contract StateRelayBase is BaseData {
         }
         require(hasSender, "StateRelay: no StateSender for this chain in input; use source-chain RPC");
 
-        address lzEndpoint = getData(currentChainId).LZ_ENDPOINT;
+        address lzEndpoint = _ensureContractLzEndpoint(getData(currentChainId).LZ_ENDPOINT);
         for (uint256 i; i < senderLabels.length; i++) {
             string memory label = senderLabels[i];
             SenderInput memory s = senderByLabel[label];
@@ -218,7 +234,7 @@ contract StateRelayBase is BaseData {
         uint256 currentChainId = block.chainid;
         require(isSupportedChainId(currentChainId), "StateRelay: rpc chain not in BaseData");
         require(currentChainId == receiverChainId, "StateRelay: destination deploy only on receiver chain RPC");
-        _deployDestination(getData(currentChainId).LZ_ENDPOINT);
+        _deployDestination(_ensureContractLzEndpoint(getData(currentChainId).LZ_ENDPOINT));
         saveDeployment();
     }
 
@@ -292,7 +308,7 @@ contract StateRelayBase is BaseData {
         _startBroadcast();
         StateSenderDynamic impl = new StateSenderDynamic(lzEndpoint);
         bytes memory init = abi.encodeCall(
-            StateSenderDynamic.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.protocolVersion)
+            StateSenderDynamic.initialize, (relayOwner, s.refundAddress, s.lzToken, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();

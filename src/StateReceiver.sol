@@ -3,19 +3,18 @@ pragma solidity ^0.8.22;
 
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
-import {StateStore} from "./StateStore.sol";
+
+import {IStateReceiver} from "./interfaces/IStateReceiver.sol";
+import {IStateStore} from "./interfaces/IStateStore.sol";
 
 /**
  * @title StateReceiver
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).
  */
-contract StateReceiver is OAppUpgradeable {
-    StateStore public stateStore;
+contract StateReceiver is OAppUpgradeable, IStateReceiver {
+    IStateStore public stateStore;
     mapping(uint8 => bool) public supportedVersions;
 
-    event SupportedVersionSet(uint8 version, bool supported);
-    event StateReceived(bytes32 key, bytes value, uint64 srcTimestamp);
-    event UnsupportedVersionReceived(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
@@ -24,7 +23,7 @@ contract StateReceiver is OAppUpgradeable {
         require(_stateStore != address(0), "Invalid stateStore");
         __Ownable_init(_owner);
         __OApp_init(_owner);
-        stateStore = StateStore(_stateStore);
+        stateStore = IStateStore(_stateStore);
 
         supportedVersions[1] = true;
     }

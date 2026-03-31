@@ -120,9 +120,8 @@ contract StateSenderTest is Test, TestHelperOz5 {
     function test_dynamic_sendState_sameAsFixed_whenCallDataMatches() public {
         bytes memory cd = abi.encodeWithSelector(MockRateTarget.getRate.selector);
         StateSenderDynamic dynImpl = new StateSenderDynamic(address(endpoints[SRC_EID]));
-        bytes memory dynInit = abi.encodeCall(
-            StateSenderDynamic.initialize, (address(this), address(mockTarget), address(this), address(0), 1)
-        );
+        bytes memory dynInit =
+            abi.encodeCall(StateSenderDynamic.initialize, (address(this), address(this), address(0), 1));
         ERC1967Proxy dynProxy = new ERC1967Proxy(address(dynImpl), dynInit);
         StateSenderDynamic dynamic = StateSenderDynamic(payable(address(dynProxy)));
 
@@ -130,8 +129,8 @@ contract StateSenderTest is Test, TestHelperOz5 {
             _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
         wireOApps(toAddressArray(address(dynProxy), sinkAddr));
 
-        MessagingFee memory fee = dynamic.quoteSendState(DST_EID, false, cd);
-        dynamic.sendState{value: fee.nativeFee}(DST_EID, false, cd);
+        MessagingFee memory fee = dynamic.quoteSendState(DST_EID, false, address(mockTarget), cd);
+        dynamic.sendState{value: fee.nativeFee}(DST_EID, false, address(mockTarget), cd);
 
         verifyPackets(DST_EID, addressToBytes32(sinkAddr));
         (, bytes32 key,,) = abi.decode(MessageSink(sinkAddr).lastMessage(), (uint256, bytes32, bytes, uint256));

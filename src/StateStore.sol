@@ -4,11 +4,13 @@ pragma solidity ^0.8.22;
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
+import {IStateStore} from "./interfaces/IStateStore.sol";
+
 /**
  * @title StateStore
  * @notice Key -> value registry with timestamp and writer allowlist (stub).
  */
-contract StateStore is Initializable, OwnableUpgradeable {
+contract StateStore is Initializable, OwnableUpgradeable, IStateStore {
     struct Entry {
         bytes value;
         uint64 srcTimestamp;
@@ -17,9 +19,6 @@ contract StateStore is Initializable, OwnableUpgradeable {
 
     mapping(bytes32 => Entry) private _entries;
     mapping(address => bool) private _writers;
-
-    event WriterSet(address indexed writer, bool allowed);
-    event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {

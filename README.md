@@ -43,7 +43,7 @@ Run with the same `script/inputs/<relay>.json` as first argument; deployment add
 
 1. **StateSender on each source chain** (pick one script; same input JSON; `--rpc-url` per sender `chainId`, **`--broadcast`** to persist):
    - **`1_DeployStateRelaySendersStatic`** — **StateSenderStatic** (calldata fixed at init).
-   - **`1_DeployStateRelaySendersDynamic`** — **StateSenderDynamic** (calldata per `sendState` / `quoteSendState`; input `callData` is not stored).
+   - **`1_DeployStateRelaySendersDynamic`** — **StateSenderDynamic** (`target` + calldata per `sendState` / `quoteSendState`; only staticcalls; input `target` / `callData` are not stored on the contract).
 2. **`2_DeployStateRelayDestination`** — **StateStore** + **StateReceiver** on **`receiverChainId`** (`--rpc-url` = destination, **`--broadcast`**).
 3. **`3_ConfigureStateRelaySenders`** — LayerZero wiring for **StateSender(s)** (once per source chain RPC; needs receiver in deployment file; **`--broadcast`**).
 4. **`4_ConfigureStateRelayReceiver`** — LayerZero wiring for **StateReceiver** (destination RPC; **`--broadcast`**).

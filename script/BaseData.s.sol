@@ -51,6 +51,7 @@ contract BaseData is Script {
         uint256 morphTestnet;
         uint256 hemiTestnet;
         uint256 binanceTestnet;
+        uint256 anvilLocal;
     }
 
     struct ChainRecord {
@@ -98,7 +99,8 @@ contract BaseData is Script {
         fraxtalTestnet: 2522,
         morphTestnet: 2810,
         hemiTestnet: 743111,
-        binanceTestnet: 97
+        binanceTestnet: 97,
+        anvilLocal: 31337
     });
 
     function setUp() public virtual {
@@ -508,6 +510,21 @@ contract BaseData is Script {
             LZ_EID: 40102
         });
 
+        // Foundry Anvil default chain id. LZ fields mirror Sepolia for script compatibility (not a live LZ deployment).
+        __chainIdToData[__chainIds.anvilLocal] = Data({
+            OFT_OWNER: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,
+            TOKEN_ADMIN: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,
+            PROXY_ADMIN: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266,
+            LZ_ENDPOINT: 0x6EDCE65403992e310A62460808c4b910D972f10f,
+            LZ_SEND_LIB: 0xcc1ae8Cf5D3904Cef3360A9532B477529b177cCE,
+            LZ_RECEIVE_LIB: 0xdAf00F5eE2158dD58E0d3857851c432E34A3A851,
+            LZ_BLOCK_SEND_LIB: 0x0C77d8d771aB35E2E184E7cE127f19CEd31FF8C0,
+            LZ_DVN: 0x8eebf8b423B73bFCa51a1Db4B7354AA0bFCA9193,
+            NETHERMIND_DVN: 0x68802e01D6321D5159208478f297d7007A7516Ed,
+            LZ_EXECUTOR: 0x718B92b5CB0a5552039B593faF724D182A881eDA,
+            LZ_EID: uint32(__chainIds.anvilLocal)
+        });
+
         fillChainRecords();
         fillSupportedChainIds();
 
@@ -563,6 +580,7 @@ contract BaseData is Script {
         _registerTestnetId(__chainIds.morphTestnet);
         _registerTestnetId(__chainIds.hemiTestnet);
         _registerTestnetId(__chainIds.binanceTestnet);
+        _registerTestnetId(__chainIds.anvilLocal);
     }
 
     function fillChainRecords() internal {
@@ -601,6 +619,7 @@ contract BaseData is Script {
         chainRecords[__chainIds.hemiTestnet] = ChainRecord({chainId: __chainIds.hemiTestnet, name: "Hemi Testnet"});
         chainRecords[__chainIds.binanceTestnet] =
             ChainRecord({chainId: __chainIds.binanceTestnet, name: "Binance Testnet"});
+        chainRecords[__chainIds.anvilLocal] = ChainRecord({chainId: __chainIds.anvilLocal, name: "Anvil Local"});
     }
 
     function fillLzEidToChainId() public {
@@ -646,6 +665,11 @@ contract BaseData is Script {
 
     function getEID(uint256 chainId) internal view returns (uint32 eid) {
         eid = getData(chainId).LZ_EID;
+    }
+
+    /// @dev Foundry Anvil default `chainid` (see `__chainIds.anvilLocal`).
+    function anvilLocalChainId() internal view returns (uint256) {
+        return __chainIds.anvilLocal;
     }
 
     function isSupportedChainId(uint256 chainId) internal view returns (bool) {
