@@ -16,7 +16,5 @@ interface IStateSenderDynamic is IStateSenderBase {
         view
         returns (MessagingFee memory fee);
 
-    function sendState(uint32 dstEid_, bool payInLzToken_, address target_, bytes calldata callData_)
-        external
-        payable;
+    function sendState(uint32 dstEid_, bool payInLzToken_, address target_, bytes calldata callData_) external payable;
 }

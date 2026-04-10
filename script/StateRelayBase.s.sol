@@ -307,9 +307,8 @@ contract StateRelayBase is BaseData {
 
         _startBroadcast();
         StateSenderDynamic impl = new StateSenderDynamic(lzEndpoint);
-        bytes memory init = abi.encodeCall(
-            StateSenderDynamic.initialize, (relayOwner, s.refundAddress, s.lzToken, s.protocolVersion)
-        );
+        bytes memory init =
+            abi.encodeCall(StateSenderDynamic.initialize, (relayOwner, s.refundAddress, s.lzToken, s.protocolVersion));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();
 

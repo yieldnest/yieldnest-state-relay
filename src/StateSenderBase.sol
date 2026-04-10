@@ -28,12 +28,10 @@ abstract contract StateSenderBase is OAppUpgradeable, IStateSenderBase {
         _disableInitializers();
     }
 
-    function __StateSenderBase_init(
-        address _owner,
-        address _refundAddress,
-        address _lzToken,
-        uint8 _version
-    ) internal onlyInitializing {
+    function __StateSenderBase_init(address _owner, address _refundAddress, address _lzToken, uint8 _version)
+        internal
+        onlyInitializing
+    {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         refundAddress = _refundAddress;
