@@ -5,8 +5,6 @@ import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oap
 import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
 
 /**
@@ -20,12 +18,9 @@ contract StateSender is OAppUpgradeable {
     bytes public callData;
     uint8 public version;
 
-    IERC20 public lzToken;
-
-    event StateSent(bytes32 key, uint32 dstEid, bool payInLzToken, bytes message);
+    event StateSent(bytes32 key, uint32 dstEid, bytes message);
     event TargetSet(address target);
     event RefundAddressSet(address refundAddress);
-    event LzTokenSet(address lzToken);
     event CallDataSet(bytes callData);
     event VersionSet(uint8 version);
 
@@ -45,7 +40,6 @@ contract StateSender is OAppUpgradeable {
         address _owner,
         address _target,
         address _refundAddress,
-        address _lzToken,
         bytes memory _callData,
         uint8 _version
     ) external reinitializer(1) {
@@ -53,7 +47,6 @@ contract StateSender is OAppUpgradeable {
         __OApp_init(_owner);
         target = _target;
         refundAddress = _refundAddress;
-        lzToken = IERC20(_lzToken);
         callData = _callData;
         version = _version;
     }
@@ -68,11 +61,6 @@ contract StateSender is OAppUpgradeable {
         emit RefundAddressSet(_refundAddress);
     }
 
-    function setLzToken(address _lzToken) external onlyOwner {
-        lzToken = IERC20(_lzToken);
-        emit LzTokenSet(_lzToken);
-    }
-
     function setCallData(bytes memory _callData) external onlyOwner {
         callData = _callData;
         emit CallDataSet(_callData);
@@ -84,41 +72,24 @@ contract StateSender is OAppUpgradeable {
     }
 
     /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
-    function quoteSendState(uint32 _dstEid, bool _payInLzToken) external view returns (MessagingFee memory fee) {
+    function quoteSendState(uint32 _dstEid) external view returns (MessagingFee memory fee) {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        return _quote(_dstEid, message, _getDefaultOptions(), _payInLzToken);
+        return _quote(_dstEid, message, _getDefaultOptions(), false);
     }
 
-    function sendState(uint32 _dstEid, bool _payInLzToken) external payable {
-        // get state data
+    function sendState(uint32 _dstEid) external payable {
         bytes memory stateData = _getStaticCallData();
-        // derive key
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
-        // encode data
         bytes memory message = _createMessage(key, stateData);
-        // get quote
         bytes memory options = _getDefaultOptions();
-        MessagingFee memory fee = _quote(_dstEid, message, options, _payInLzToken);
+        MessagingFee memory fee = _quote(_dstEid, message, options, false);
 
-        if (_payInLzToken) {
-            uint256 balance = lzToken.balanceOf(address(this));
+        require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
+        _lzSend(_dstEid, message, options, fee, refundAddress);
 
-            if (balance < fee.lzTokenFee) {
-                // transfer balance difference from sender to this contract
-                uint256 balanceDifference = fee.lzTokenFee - balance;
-                SafeERC20.safeTransferFrom(lzToken, msg.sender, address(this), balanceDifference);
-            }
-
-            SafeERC20.safeIncreaseAllowance(lzToken, address(endpoint), fee.lzTokenFee);
-            _lzSend(_dstEid, message, options, fee, refundAddress);
-        } else {
-            require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
-            _lzSend(_dstEid, message, options, fee, refundAddress);
-        }
-
-        emit StateSent(key, _dstEid, _payInLzToken, message);
+        emit StateSent(key, _dstEid, message);
     }
 
     /// @dev Options used for quote and send (executor lzReceive gas + value for destination).

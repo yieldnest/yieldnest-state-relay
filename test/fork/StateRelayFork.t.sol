@@ -48,7 +48,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
         StateSender impl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize, (address(this), ynEthx_, address(this), address(0), CONVERT_TO_ASSETS_CALLDATA, 1)
+            StateSender.initialize, (address(this), ynEthx_, address(this), CONVERT_TO_ASSETS_CALLDATA, 1)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
@@ -71,10 +71,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         require(ok, "fork: convertToAssets staticcall failed");
         uint256 expectedAssets = abi.decode(ret, (uint256));
 
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID, false);
+        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee.nativeFee}(DST_EID, false);
+        stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         assertEq(messageSink.lastMessage().length, 192, "message size");
@@ -92,9 +92,9 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     }
 
     function _assertInsufficientNativeFeeReverts() internal {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID, false);
+        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         vm.expectRevert("StateSender: insufficient native fee");
-        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID, false);
+        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
 }
 

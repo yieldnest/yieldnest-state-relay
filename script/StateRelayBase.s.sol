@@ -20,7 +20,6 @@ contract StateRelayBase is BaseData {
         address target;
         bytes callData;
         address refundAddress;
-        address lzToken;
         uint8 protocolVersion;
     }
 
@@ -111,7 +110,6 @@ contract StateRelayBase is BaseData {
             address target = vm.parseJsonAddress(json, string.concat(sp, ".target"));
             bytes memory callData = vm.parseJsonBytes(json, string.concat(sp, ".callData"));
             address refund = vm.parseJsonAddress(json, string.concat(sp, ".refundAddress"));
-            address lzTok = vm.parseJsonAddress(json, string.concat(sp, ".lzToken"));
             uint8 pVer = uint8(vm.parseJsonUint(json, string.concat(sp, ".protocolVersion")));
             require(target != address(0), "StateRelay: sender target");
             require(callData.length > 0, "StateRelay: sender callData");
@@ -122,7 +120,6 @@ contract StateRelayBase is BaseData {
                 target: target,
                 callData: callData,
                 refundAddress: refund,
-                lzToken: lzTok,
                 protocolVersion: pVer
             });
             _pushUniqueChainId(sChain);
@@ -259,7 +256,7 @@ contract StateRelayBase is BaseData {
         _startBroadcast();
         StateSender impl = new StateSender(lzEndpoint);
         bytes memory init = abi.encodeCall(
-            StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.lzToken, s.callData, s.protocolVersion)
+            StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         vm.stopBroadcast();

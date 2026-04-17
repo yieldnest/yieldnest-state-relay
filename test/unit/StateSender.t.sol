@@ -29,14 +29,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender impl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (
-                address(this),
-                address(mockTarget),
-                address(this),
-                address(0),
-                abi.encodeWithSelector(MockRateTarget.getRate.selector),
-                1
-            )
+            (address(this), address(mockTarget), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
@@ -56,10 +49,10 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_sendState_native_packetDelivered() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID, false);
+        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee.nativeFee}(DST_EID, false);
+        stateSender.sendState{value: fee.nativeFee}(DST_EID);
 
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
@@ -79,9 +72,9 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_sendState_insufficientNativeFee_reverts() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID, false);
+        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         vm.expectRevert("StateSender: insufficient native fee");
-        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID, false);
+        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
 
     function test_staticcallFailure_reverts() public {
@@ -89,24 +82,17 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender badImpl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (
-                address(this),
-                address(badImpl),
-                address(this),
-                address(0),
-                abi.encodeWithSelector(MockRateTarget.getRate.selector),
-                1
-            )
+            (address(this), address(badImpl), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
         StateSender badSender = StateSender(address(badProxy));
         vm.expectRevert("StateSender: staticcall failed");
-        badSender.quoteSendState(DST_EID, false);
+        badSender.quoteSendState(DST_EID);
     }
 
     function test_deriveKey_matchesStoredKey() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID, false);
-        stateSender.sendState{value: fee.nativeFee}(DST_EID, false);
+        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
+        stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
