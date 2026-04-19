@@ -198,7 +198,8 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnetToArbitrum_rateAdapter_revertsWhenDeliveryStale() public {
         (StateStore stateStore, bytes32 key,, uint256 deliveredAt) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        // Keep source window wider so this test isolates delivery-stale behavior.
+        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
 
         vm.warp(deliveredAt + STALENESS + 1);
         vm.expectRevert("StateReaderBase: delivery stale");
