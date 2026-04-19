@@ -70,6 +70,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
 
         stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
@@ -89,6 +90,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
     function _assertInsufficientNativeFeeReverts() internal {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
         vm.expectRevert("StateSender: insufficient native fee");
         stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }

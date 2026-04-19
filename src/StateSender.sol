@@ -23,6 +23,7 @@ contract StateSender is OAppUpgradeable {
     event RefundAddressSet(address refundAddress);
     event CallDataSet(bytes callData);
     event VersionSet(uint8 version);
+    error StateSender_LzTokenPaymentNotSupported();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -76,7 +77,8 @@ contract StateSender is OAppUpgradeable {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        return _quote(_dstEid, message, _getDefaultOptions(), false);
+        fee = _quote(_dstEid, message, _getDefaultOptions(), false);
+        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
     }
 
     function sendState(uint32 _dstEid) external payable {
@@ -85,6 +87,7 @@ contract StateSender is OAppUpgradeable {
         bytes memory message = _createMessage(key, stateData);
         bytes memory options = _getDefaultOptions();
         MessagingFee memory fee = _quote(_dstEid, message, options, false);
+        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
 
         require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
         _lzSend(_dstEid, message, options, fee, refundAddress);
