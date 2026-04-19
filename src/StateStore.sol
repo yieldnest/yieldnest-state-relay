@@ -15,6 +15,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         uint64 updatedAt;
     }
 
+    bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
 
@@ -29,12 +30,18 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     function initialize(address owner_, address[] memory writers_) external initializer {
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
+        _grantRole(WRITER_MANAGER_ROLE, owner_);
+        _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);
         for (uint256 i = 0; i < writers_.length; i++) {
             _grantRole(WRITER_ROLE, writers_[i]);
         }
     }
 
-    function setWriter(address writer, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setWriterManager(address writerManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _grantRole(WRITER_MANAGER_ROLE, writerManager);
+    }
+
+    function setWriter(address writer, bool allowed) external onlyRole(WRITER_MANAGER_ROLE) {
         if (allowed) {
             _grantRole(WRITER_ROLE, writer);
         } else {
