@@ -106,7 +106,7 @@ contract StateSender is OAppUpgradeable {
     }
 
     function _createMessage(bytes32 key, bytes memory stateData) internal view returns (bytes memory) {
-        return abi.encode(block.chainid, key, stateData, block.timestamp);
+        return abi.encode(version, key, stateData, uint64(block.timestamp));
     }
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {

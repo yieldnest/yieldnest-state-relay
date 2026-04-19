@@ -56,11 +56,11 @@ contract StateSenderTest is Test, TestHelperOz5 {
 
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
-        // abi.encode(chainId, key, stateData, timestamp): 32*4 + 32 (stateData len) + 32 (stateData) = 192
+        // abi.encode(version, key, stateData, srcTimestamp): 32*4 + 32 (stateData len) + 32 (stateData) = 192
         assertEq(messageSink.lastMessage().length, 192, "message size");
-        (uint256 chainId, bytes32 key, bytes memory stateData, uint256 ts) =
-            abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
-        assertEq(chainId, block.chainid);
+        (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
+            abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
+        assertEq(msgVersion, stateSender.version());
         assertEq(ts, block.timestamp);
         assertEq(stateData.length, 32);
         assertEq(abi.decode(stateData, (uint256)), 1e18);
@@ -95,7 +95,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
-        (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
+        (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
         bytes32 expectedKey = KeyDerivation.deriveKey(
             block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
