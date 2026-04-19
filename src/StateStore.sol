@@ -20,6 +20,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     mapping(bytes32 => Entry) private _entries;
 
     event WriterSet(address indexed writer, bool allowed);
+    event WriterManagerSet(address indexed writerManager, bool allowed);
     event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -29,6 +30,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
 
     function initialize(address owner_, address[] memory writers_) external initializer {
         __AccessControl_init();
+        require(owner_ != address(0), "StateStore: owner cannot be 0");
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(WRITER_MANAGER_ROLE, owner_);
         _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);
@@ -37,8 +39,13 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         }
     }
 
-    function setWriterManager(address writerManager) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        _grantRole(WRITER_MANAGER_ROLE, writerManager);
+    function setWriterManager(address writerManager, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (allowed) {
+            _grantRole(WRITER_MANAGER_ROLE, writerManager);
+        } else {
+            _revokeRole(WRITER_MANAGER_ROLE, writerManager);
+        }
+        emit WriterManagerSet(writerManager, allowed);
     }
 
     function setWriter(address writer, bool allowed) external onlyRole(WRITER_MANAGER_ROLE) {
