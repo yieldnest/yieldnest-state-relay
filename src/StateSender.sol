@@ -99,6 +99,10 @@ contract StateSender is OAppUpgradeable {
     function _getDefaultOptions() internal pure returns (bytes memory) {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
     }
+     
+    function getStaticCallData() public view returns (bytes memory) {
+        return _getStaticCallData();
+    }
 
     function _getStaticCallData() internal view returns (bytes memory) {
         (bool success, bytes memory data) = target.staticcall(callData);
