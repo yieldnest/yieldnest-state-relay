@@ -2,21 +2,21 @@
 pragma solidity ^0.8.22;
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
 /**
  * @title StateStore
  * @notice Key -> value registry with timestamp and writer allowlist (stub).
  */
-contract StateStore is Initializable, OwnableUpgradeable {
+contract StateStore is Initializable, AccessControlUpgradeable {
     struct Entry {
         bytes value;
         uint64 srcTimestamp;
         uint64 updatedAt;
     }
 
+    bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
-    mapping(address => bool) private _writers;
 
     event WriterSet(address indexed writer, bool allowed);
     event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
@@ -27,19 +27,24 @@ contract StateStore is Initializable, OwnableUpgradeable {
     }
 
     function initialize(address owner_, address[] memory writers_) external initializer {
-        __Ownable_init(owner_);
+        __AccessControl_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         for (uint256 i = 0; i < writers_.length; i++) {
-            _writers[writers_[i]] = true;
+            _grantRole(WRITER_ROLE, writers_[i]);
         }
     }
 
-    function setWriter(address writer, bool allowed) external onlyOwner {
-        _writers[writer] = allowed;
+    function setWriter(address writer, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (allowed) {
+            _grantRole(WRITER_ROLE, writer);
+        } else {
+            _revokeRole(WRITER_ROLE, writer);
+        }
         emit WriterSet(writer, allowed);
     }
 
     function isWriter(address account) public view returns (bool) {
-        return _writers[account];
+        return hasRole(WRITER_ROLE, account);
     }
 
     function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
