@@ -37,6 +37,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
     /// @dev ynETHx vault on the forked chain (mainnet only in this base).
     address internal ynEthx;
+
     function _initAfterFork(address ynEthx_) internal {
         ynEthx = ynEthx_;
 

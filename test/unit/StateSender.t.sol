@@ -31,7 +31,13 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender impl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(mockTarget), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(mockTarget),
+                address(this),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
@@ -39,7 +45,13 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
         bytes memory quoteInitData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(mockTarget), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(mockTarget),
+                address(this),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy quoteProxy = new ERC1967Proxy(address(quoteImpl), quoteInitData);
         quoteHarness = StateSenderQuoteHarness(address(quoteProxy));

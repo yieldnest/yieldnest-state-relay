@@ -37,13 +37,10 @@ contract StateSender is OAppUpgradeable {
      * @param _callData The function signature and data to make the staticcall state retrieval from the target contract
      * @param _version The version of the state relay
      */
-    function initialize(
-        address _owner,
-        address _target,
-        address _refundAddress,
-        bytes memory _callData,
-        uint8 _version
-    ) external reinitializer(1) {
+    function initialize(address _owner, address _target, address _refundAddress, bytes memory _callData, uint8 _version)
+        external
+        reinitializer(1)
+    {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         target = _target;
@@ -99,7 +96,7 @@ contract StateSender is OAppUpgradeable {
     function _getDefaultOptions() internal pure returns (bytes memory) {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
     }
-     
+
     function getStaticCallData() public view returns (bytes memory) {
         return _getStaticCallData();
     }
