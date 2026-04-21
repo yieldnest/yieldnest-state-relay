@@ -14,11 +14,11 @@ contract StateReceiver is OAppUpgradeable {
     mapping(uint8 => bool) public supportedVersions;
 
     event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
-    event StateReceived(bytes32 key, bytes value, uint64 srcTimestamp);
-    event UnsupportedVersionReceived(uint8 version);
+    event MessageReceived(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp);
 
     error StateReceiver_InvalidOwner();
     error StateReceiver_InvalidStateStore();
+    error StateReceiver_UnsupportedVersion(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
@@ -52,17 +52,10 @@ contract StateReceiver is OAppUpgradeable {
     {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
 
-        // check if version is supported
-        if (supportedVersions[version]) {
-            // call stateStore.write()
-            stateStore.write(
-                key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp})
-            );
-            // emit event
-            emit StateReceived(key, value, srcTimestamp);
-        } else {
-            emit UnsupportedVersionReceived(version);
-        }
-        // if version is not supported ignore the message
+        // Revert on unsupported versions so LayerZero retains the message for retry after upgrade.
+        if (!supportedVersions[version]) revert StateReceiver_UnsupportedVersion(version);
+
+        stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
+        emit MessageReceived(version, key, value, srcTimestamp);
     }
 }

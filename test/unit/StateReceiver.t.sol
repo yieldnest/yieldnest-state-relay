@@ -44,11 +44,12 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(abi.decode(stored, (uint256)), 1e18);
     }
 
-    function test_receivePayload_unsupportedVersion_ignoresMessage() public {
+    function test_receivePayload_unsupportedVersion_reverts() public {
         uint64 ts = uint64(block.timestamp);
         bytes memory value = abi.encode(uint256(1e18));
         bytes memory message = abi.encode(uint8(99), KEY, value, ts);
 
+        vm.expectRevert(abi.encodeWithSelector(StateReceiver.StateReceiver_UnsupportedVersion.selector, uint8(99)));
         receiver.receivePayload(message);
 
         StateStore.Entry memory entry = stateStore.get(KEY);
