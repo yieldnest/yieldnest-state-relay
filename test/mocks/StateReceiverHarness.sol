@@ -2,6 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {StateReceiver} from "src/StateReceiver.sol";
+import {StateStore} from "src/StateStore.sol";
 
 /**
  * @title StateReceiverHarness
@@ -15,7 +16,9 @@ contract StateReceiverHarness is StateReceiver {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint8, bytes32, bytes, uint64));
         if (supportedVersions[version]) {
-            stateStore.write(key, version, value, srcTimestamp);
+            stateStore.write(
+                key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp})
+            );
             emit StateReceived(key, value, srcTimestamp);
         }
     }

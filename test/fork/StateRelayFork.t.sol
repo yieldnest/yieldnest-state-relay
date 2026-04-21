@@ -171,7 +171,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
 
         deliveredAt = block.timestamp;
 
-        (bytes memory stored,,,) = stateStore.get(key);
+        bytes memory stored = stateStore.get(key).value;
         assertEq(stored, stateData);
         assertEq(abi.decode(stored, (uint256)), expectedRate);
     }

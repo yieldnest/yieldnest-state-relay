@@ -39,7 +39,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored,,,) = stateStore.get(KEY);
+        bytes memory stored = stateStore.get(KEY).value;
         assertEq(stored, value);
         assertEq(abi.decode(stored, (uint256)), 1e18);
     }
@@ -51,10 +51,10 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored,, uint64 srcTs, uint64 updatedAt) = stateStore.get(KEY);
-        assertEq(stored.length, 0);
-        assertEq(srcTs, 0);
-        assertEq(updatedAt, 0);
+        StateStore.Entry memory entry = stateStore.get(KEY);
+        assertEq(entry.value.length, 0);
+        assertEq(entry.srcTimestamp, 0);
+        assertEq(entry.updatedAt, 0);
     }
 
     function test_receivePayload_setSupportedVersion_thenReceives() public {
@@ -66,7 +66,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored,,,) = stateStore.get(KEY);
+        bytes memory stored = stateStore.get(KEY).value;
         assertEq(abi.decode(stored, (uint256)), 2e18);
     }
 

@@ -9,6 +9,12 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
  * @notice Key -> value registry with timestamp and writer allowlist (stub).
  */
 contract StateStore is Initializable, AccessControlUpgradeable {
+    struct StateUpdate {
+        bytes value;
+        uint8 version;
+        uint64 srcTimestamp;
+    }
+
     struct Entry {
         bytes value;
         uint8 version;
@@ -46,23 +52,18 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function write(bytes32 key, uint8 version, bytes calldata value, uint64 srcTimestamp) external {
+    function write(bytes32 key, StateUpdate calldata update) external {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         Entry storage e = _entries[key];
-        if (srcTimestamp < e.srcTimestamp) revert StateStore_Stale();
-        e.value = value;
-        e.version = version;
-        e.srcTimestamp = srcTimestamp;
+        if (update.srcTimestamp < e.srcTimestamp) revert StateStore_Stale();
+        e.value = update.value;
+        e.version = update.version;
+        e.srcTimestamp = update.srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
-        emit StateUpdated(key, version, srcTimestamp, e.updatedAt);
+        emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
     }
 
-    function get(bytes32 key)
-        external
-        view
-        returns (bytes memory value, uint8 version, uint64 srcTimestamp, uint64 updatedAt)
-    {
-        Entry storage e = _entries[key];
-        return (e.value, e.version, e.srcTimestamp, e.updatedAt);
+    function get(bytes32 key) external view returns (Entry memory) {
+        return _entries[key];
     }
 }

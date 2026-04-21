@@ -29,9 +29,9 @@ abstract contract StateReaderBase {
 
     /// @dev Returns raw value after staleness checks. Subclasses use this and decode to their type.
     function _getValue() internal view returns (bytes memory) {
-        (bytes memory data,, uint64 srcTimestamp, uint64 updatedAt) = stateStore.get(stateKey);
-        _assertStaleness(srcTimestamp, updatedAt);
-        return data;
+        StateStore.Entry memory entry = stateStore.get(stateKey);
+        _assertStaleness(entry.srcTimestamp, entry.updatedAt);
+        return entry.value;
     }
 
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
