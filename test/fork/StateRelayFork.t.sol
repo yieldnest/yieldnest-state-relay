@@ -150,15 +150,18 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         TestHelperOz5.setUp();
         setUpEndpoints(1, LibraryType.UltraLightNode);
 
-        StateStore storeImpl = new StateStore();
-        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
-        ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
-        stateStore = StateStore(address(storeProxy));
+        StateReceiverHarness receiver;
+        {
+            StateStore storeImpl = new StateStore();
+            bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
+            ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
+            stateStore = StateStore(address(storeProxy));
 
-        StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
-        bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
-        ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
-        StateReceiverHarness receiver = StateReceiverHarness(address(recvProxy));
+            StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
+            bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
+            ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
+            receiver = StateReceiverHarness(address(recvProxy));
+        }
 
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
 
