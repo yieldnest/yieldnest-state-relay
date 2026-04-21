@@ -47,7 +47,7 @@ contract TestRateAdapterTest is Test {
     function test_getRate_sourceStale_reverts() public {
         stateStore.write(rateKey, abi.encode(1e18), uint64(block.timestamp));
         vm.warp(block.timestamp + STALENESS + 1);
-        vm.expectRevert("StateReaderBase: source stale");
+        vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
         rateAdapter.getRate();
     }
 
@@ -55,7 +55,7 @@ contract TestRateAdapterTest is Test {
         // With one write, source and delivery age together; source check runs first
         stateStore.write(rateKey, abi.encode(1e18), uint64(block.timestamp));
         vm.warp(block.timestamp + STALENESS + 1);
-        vm.expectRevert("StateReaderBase: source stale");
+        vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
         rateAdapter.getRate();
     }
 

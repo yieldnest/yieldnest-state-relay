@@ -16,12 +16,15 @@ contract StateReceiver is OAppUpgradeable {
     event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
     event StateReceived(bytes32 key, bytes value, uint64 srcTimestamp);
     event UnsupportedVersionReceived(uint8 version);
+
+    error StateReceiver_InvalidOwner();
+    error StateReceiver_InvalidStateStore();
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
     function initialize(address _owner, address _stateStore) external reinitializer(1) {
-        require(_owner != address(0), "Invalid owner");
-        require(_stateStore != address(0), "Invalid stateStore");
+        if (_owner == address(0)) revert StateReceiver_InvalidOwner();
+        if (_stateStore == address(0)) revert StateReceiver_InvalidStateStore();
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);

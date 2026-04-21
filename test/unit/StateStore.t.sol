@@ -26,7 +26,7 @@ contract StateStoreTest is Test {
     function test_write_lowerTimestamp_reverts() public {
         uint64 ts = uint64(block.timestamp);
         stateStore.write(KEY, abi.encode(uint256(1e18)), ts);
-        vm.expectRevert("StateStore: stale");
+        vm.expectRevert(StateStore.StateStore_Stale.selector);
         stateStore.write(KEY, abi.encode(uint256(2e18)), ts - 1);
     }
 

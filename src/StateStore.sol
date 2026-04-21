@@ -21,6 +21,10 @@ contract StateStore is Initializable, AccessControlUpgradeable {
 
     event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
 
+    error StateStore_OwnerCannotBeZero();
+    error StateStore_NotWriter();
+    error StateStore_Stale();
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -28,7 +32,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
 
     function initialize(address owner_, address[] memory writers_) external initializer {
         __AccessControl_init();
-        require(owner_ != address(0), "StateStore: owner cannot be 0");
+        if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(WRITER_MANAGER_ROLE, owner_);
         _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);
@@ -42,9 +46,9 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     }
 
     function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
-        require(isWriter(msg.sender), "StateStore: not writer");
+        if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         Entry storage e = _entries[key];
-        require(srcTimestamp >= e.srcTimestamp, "StateStore: stale");
+        if (srcTimestamp < e.srcTimestamp) revert StateStore_Stale();
         e.value = value;
         e.srcTimestamp = srcTimestamp;
         e.updatedAt = uint64(block.timestamp);

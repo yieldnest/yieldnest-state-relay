@@ -27,6 +27,8 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
     event CallDataSet(bytes previousCallData, bytes newCallData);
     event VersionSet(uint8 previousVersion, uint8 newVersion);
     error StateSender_LzTokenPaymentNotSupported();
+    error StateSender_InsufficientNativeFee();
+    error StateSender_StaticcallFailed();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -92,7 +94,7 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
         MessagingFee memory fee = _quote(_dstEid, message, options, false);
         if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
 
-        require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
+        if (msg.value < fee.nativeFee) revert StateSender_InsufficientNativeFee();
         _lzSend(_dstEid, message, options, fee, refundAddress);
 
         emit StateSent(key, _dstEid, message);
@@ -110,7 +112,7 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
     function _getStaticCallData() internal view returns (bytes memory) {
         (bool success, bytes memory data) = target.staticcall(callData);
 
-        require(success, "StateSender: staticcall failed");
+        if (!success) revert StateSender_StaticcallFailed();
 
         return data;
     }

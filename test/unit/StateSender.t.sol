@@ -97,7 +97,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
     function test_sendState_insufficientNativeFee_reverts() public {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
-        vm.expectRevert("StateSender: insufficient native fee");
+        vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
         stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
 
@@ -110,7 +110,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
         StateSender badSender = StateSender(address(badProxy));
-        vm.expectRevert("StateSender: staticcall failed");
+        vm.expectRevert(StateSender.StateSender_StaticcallFailed.selector);
         badSender.quoteSendState(DST_EID);
     }
 

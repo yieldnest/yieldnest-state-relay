@@ -9,6 +9,7 @@ import {MessageSink} from "test/mocks/MessageSink.sol";
 import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
 import {StateStore} from "src/StateStore.sol";
 import {RateAdapter} from "src/RateAdapter.sol";
+import {StateReaderBase} from "src/StateReaderBase.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -92,7 +93,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     function _assertInsufficientNativeFeeReverts() internal {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
-        vm.expectRevert("StateSender: insufficient native fee");
+        vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
         stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
 }
@@ -204,7 +205,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
 
         vm.warp(deliveredAt + STALENESS + 1);
-        vm.expectRevert("StateReaderBase: delivery stale");
+        vm.expectRevert(StateReaderBase.StateReaderBase_DeliveryStale.selector);
         adapter.getRate();
     }
 }
