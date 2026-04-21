@@ -160,7 +160,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         StateReceiverHarness receiver = StateReceiverHarness(address(recvProxy));
 
-        stateStore.setWriter(address(receiver), true);
+        stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
 
         bytes memory message = abi.encode(uint8(1), key, stateData, srcTs);
         receiver.receivePayload(message);

@@ -19,8 +19,6 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
 
-    event WriterSet(address indexed writer, bool allowed);
-    event WriterManagerSet(address indexed writerManager, bool allowed);
     event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -37,24 +35,6 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         for (uint256 i = 0; i < writers_.length; i++) {
             _grantRole(WRITER_ROLE, writers_[i]);
         }
-    }
-
-    function setWriterManager(address writerManager, bool allowed) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        if (allowed) {
-            _grantRole(WRITER_MANAGER_ROLE, writerManager);
-        } else {
-            _revokeRole(WRITER_MANAGER_ROLE, writerManager);
-        }
-        emit WriterManagerSet(writerManager, allowed);
-    }
-
-    function setWriter(address writer, bool allowed) external onlyRole(WRITER_MANAGER_ROLE) {
-        if (allowed) {
-            _grantRole(WRITER_ROLE, writer);
-        } else {
-            _revokeRole(WRITER_ROLE, writer);
-        }
-        emit WriterSet(writer, allowed);
     }
 
     function isWriter(address account) public view returns (bool) {

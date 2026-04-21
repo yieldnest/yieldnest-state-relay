@@ -234,7 +234,7 @@ contract StateRelayBase is BaseData {
         StateStore store = StateStore(stateStoreOf[dstChainId]);
         if (!store.isWriter(stateReceiverOf[dstChainId])) {
             _startBroadcast();
-            store.setWriter(stateReceiverOf[dstChainId], true);
+            store.grantRole(store.WRITER_ROLE(), stateReceiverOf[dstChainId]);
             vm.stopBroadcast();
             console.log("Granted StateReceiver writer on StateStore");
         }

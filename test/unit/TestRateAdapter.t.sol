@@ -20,7 +20,7 @@ contract TestRateAdapterTest is Test {
         bytes memory initData = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateStore = StateStore(address(proxy));
-        stateStore.setWriter(address(this), true);
+        stateStore.grantRole(stateStore.WRITER_ROLE(), address(this));
         rateKey = KeyDerivation.deriveKey(block.chainid, address(0x123), hex"679aefce");
         rateAdapter = new RateAdapter(address(stateStore), rateKey, STALENESS, STALENESS);
     }

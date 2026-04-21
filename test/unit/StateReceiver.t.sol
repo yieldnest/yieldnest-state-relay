@@ -29,7 +29,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         receiver = StateReceiverHarness(address(recvProxy));
 
-        stateStore.setWriter(address(receiver), true);
+        stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
     }
 
     function test_receivePayload_supportedVersion_writesToStore() public {
