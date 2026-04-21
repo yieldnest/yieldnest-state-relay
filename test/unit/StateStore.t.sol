@@ -19,22 +19,22 @@ contract StateStoreTest is Test {
 
     function test_write_sameTimestamp_no_revert() public {
         uint64 ts = uint64(block.timestamp);
-        stateStore.write(KEY, abi.encode(uint256(1e18)), ts);
-        stateStore.write(KEY, abi.encode(uint256(2e18)), ts);
+        stateStore.write(KEY, 1, abi.encode(uint256(1e18)), ts);
+        stateStore.write(KEY, 1, abi.encode(uint256(2e18)), ts);
     }
 
     function test_write_lowerTimestamp_reverts() public {
         uint64 ts = uint64(block.timestamp);
-        stateStore.write(KEY, abi.encode(uint256(1e18)), ts);
+        stateStore.write(KEY, 1, abi.encode(uint256(1e18)), ts);
         vm.expectRevert(StateStore.StateStore_Stale.selector);
-        stateStore.write(KEY, abi.encode(uint256(2e18)), ts - 1);
+        stateStore.write(KEY, 1, abi.encode(uint256(2e18)), ts - 1);
     }
 
     function test_write_strictlyIncreasingTimestamp_succeeds() public {
         uint64 ts = uint64(block.timestamp);
-        stateStore.write(KEY, abi.encode(uint256(1e18)), ts);
-        stateStore.write(KEY, abi.encode(uint256(2e18)), ts + 1);
-        (bytes memory value,,) = stateStore.get(KEY);
+        stateStore.write(KEY, 1, abi.encode(uint256(1e18)), ts);
+        stateStore.write(KEY, 1, abi.encode(uint256(2e18)), ts + 1);
+        (bytes memory value,,,) = stateStore.get(KEY);
         assertEq(abi.decode(value, (uint256)), 2e18);
     }
 }

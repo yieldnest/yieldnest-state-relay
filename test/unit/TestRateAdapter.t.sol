@@ -29,23 +29,23 @@ contract TestRateAdapterTest is Test {
 
     function test_getRate_returnsDecodedUint256() public {
         uint256 rate = 1e18;
-        stateStore.write(rateKey, abi.encode(rate), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(rate), uint64(block.timestamp));
         assertEq(rateAdapter.getRate(), rate);
     }
 
     function test_getRate_decodesDifferentRates() public {
-        stateStore.write(rateKey, abi.encode(uint256(2e18)), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(uint256(2e18)), uint64(block.timestamp));
         assertEq(rateAdapter.getRate(), 2e18);
 
         vm.warp(block.timestamp + 1);
-        stateStore.write(rateKey, abi.encode(uint256(99e6)), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(uint256(99e6)), uint64(block.timestamp));
         assertEq(rateAdapter.getRate(), 99e6);
     }
 
     // --- StateReaderBase: staleness checks ---
 
     function test_getRate_sourceStale_reverts() public {
-        stateStore.write(rateKey, abi.encode(1e18), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(1e18), uint64(block.timestamp));
         vm.warp(block.timestamp + STALENESS + 1);
         vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
         rateAdapter.getRate();
@@ -53,14 +53,14 @@ contract TestRateAdapterTest is Test {
 
     function test_getRate_deliveryStale_reverts() public {
         // With one write, source and delivery age together; source check runs first
-        stateStore.write(rateKey, abi.encode(1e18), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(1e18), uint64(block.timestamp));
         vm.warp(block.timestamp + STALENESS + 1);
         vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
         rateAdapter.getRate();
     }
 
     function test_getRate_withinStaleness_succeeds() public {
-        stateStore.write(rateKey, abi.encode(1e18), uint64(block.timestamp));
+        stateStore.write(rateKey, 1, abi.encode(1e18), uint64(block.timestamp));
         vm.warp(block.timestamp + STALENESS - 1);
         assertEq(rateAdapter.getRate(), 1e18);
     }

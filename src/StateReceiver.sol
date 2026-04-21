@@ -55,7 +55,7 @@ contract StateReceiver is OAppUpgradeable {
         // check if version is supported
         if (supportedVersions[version]) {
             // call stateStore.write()
-            stateStore.write(key, value, srcTimestamp);
+            stateStore.write(key, version, value, srcTimestamp);
             // emit event
             emit StateReceived(key, value, srcTimestamp);
         } else {

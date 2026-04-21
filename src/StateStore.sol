@@ -11,6 +11,7 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 contract StateStore is Initializable, AccessControlUpgradeable {
     struct Entry {
         bytes value;
+        uint8 version;
         uint64 srcTimestamp;
         uint64 updatedAt;
     }
@@ -19,7 +20,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
 
-    event StateUpdated(bytes32 indexed key, uint64 srcTimestamp, uint64 updatedAt);
+    event StateUpdated(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 updatedAt);
 
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
@@ -45,18 +46,23 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
+    function write(bytes32 key, uint8 version, bytes calldata value, uint64 srcTimestamp) external {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         Entry storage e = _entries[key];
         if (srcTimestamp < e.srcTimestamp) revert StateStore_Stale();
         e.value = value;
+        e.version = version;
         e.srcTimestamp = srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
-        emit StateUpdated(key, srcTimestamp, e.updatedAt);
+        emit StateUpdated(key, version, srcTimestamp, e.updatedAt);
     }
 
-    function get(bytes32 key) external view returns (bytes memory value, uint64 srcTimestamp, uint64 updatedAt) {
+    function get(bytes32 key)
+        external
+        view
+        returns (bytes memory value, uint8 version, uint64 srcTimestamp, uint64 updatedAt)
+    {
         Entry storage e = _entries[key];
-        return (e.value, e.srcTimestamp, e.updatedAt);
+        return (e.value, e.version, e.srcTimestamp, e.updatedAt);
     }
 }

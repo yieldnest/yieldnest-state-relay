@@ -39,7 +39,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored,,) = stateStore.get(KEY);
+        (bytes memory stored,,,) = stateStore.get(KEY);
         assertEq(stored, value);
         assertEq(abi.decode(stored, (uint256)), 1e18);
     }
@@ -51,7 +51,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored, uint64 srcTs, uint64 updatedAt) = stateStore.get(KEY);
+        (bytes memory stored,, uint64 srcTs, uint64 updatedAt) = stateStore.get(KEY);
         assertEq(stored.length, 0);
         assertEq(srcTs, 0);
         assertEq(updatedAt, 0);
@@ -66,7 +66,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
         receiver.receivePayload(message);
 
-        (bytes memory stored,,) = stateStore.get(KEY);
+        (bytes memory stored,,,) = stateStore.get(KEY);
         assertEq(abi.decode(stored, (uint256)), 2e18);
     }
 
