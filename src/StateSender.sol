@@ -2,6 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
@@ -12,7 +13,9 @@ import {KeyDerivation} from "./KeyDerivation.sol";
  * @notice Source-chain upgradeable OApp: reads state via staticcall, sends via _lzSend.
  * @dev Stub: key derivation and send logic to be implemented.
  */
-contract StateSender is OAppUpgradeable {
+contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
+    bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+
     address public target;
     address public refundAddress;
     bytes public callData;
@@ -43,28 +46,31 @@ contract StateSender is OAppUpgradeable {
     {
         __Ownable_init(_owner);
         __OApp_init(_owner);
+        __AccessControl_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(CONFIG_MANAGER_ROLE, _owner);
         target = _target;
         refundAddress = _refundAddress;
         callData = _callData;
         version = _version;
     }
 
-    function setTarget(address _target) external onlyOwner {
+    function setTarget(address _target) external onlyRole(CONFIG_MANAGER_ROLE) {
         target = _target;
         emit TargetSet(_target);
     }
 
-    function setRefundAddress(address _refundAddress) external onlyOwner {
+    function setRefundAddress(address _refundAddress) external onlyRole(CONFIG_MANAGER_ROLE) {
         refundAddress = _refundAddress;
         emit RefundAddressSet(_refundAddress);
     }
 
-    function setCallData(bytes memory _callData) external onlyOwner {
+    function setCallData(bytes memory _callData) external onlyRole(CONFIG_MANAGER_ROLE) {
         callData = _callData;
         emit CallDataSet(_callData);
     }
 
-    function setVersion(uint8 _version) external onlyOwner {
+    function setVersion(uint8 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
         version = _version;
         emit VersionSet(_version);
     }
