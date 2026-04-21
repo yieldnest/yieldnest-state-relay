@@ -23,6 +23,7 @@ contract StateSender is OAppUpgradeable {
     event RefundAddressSet(address refundAddress);
     event CallDataSet(bytes callData);
     event VersionSet(uint8 version);
+    error StateSender_LzTokenPaymentNotSupported();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -36,13 +37,10 @@ contract StateSender is OAppUpgradeable {
      * @param _callData The function signature and data to make the staticcall state retrieval from the target contract
      * @param _version The version of the state relay
      */
-    function initialize(
-        address _owner,
-        address _target,
-        address _refundAddress,
-        bytes memory _callData,
-        uint8 _version
-    ) external reinitializer(1) {
+    function initialize(address _owner, address _target, address _refundAddress, bytes memory _callData, uint8 _version)
+        external
+        reinitializer(1)
+    {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         target = _target;
@@ -76,7 +74,8 @@ contract StateSender is OAppUpgradeable {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        return _quote(_dstEid, message, _getDefaultOptions(), false);
+        fee = _quote(_dstEid, message, _getDefaultOptions(), false);
+        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
     }
 
     function sendState(uint32 _dstEid) external payable {
@@ -85,6 +84,7 @@ contract StateSender is OAppUpgradeable {
         bytes memory message = _createMessage(key, stateData);
         bytes memory options = _getDefaultOptions();
         MessagingFee memory fee = _quote(_dstEid, message, options, false);
+        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
 
         require(msg.value >= fee.nativeFee, "StateSender: insufficient native fee");
         _lzSend(_dstEid, message, options, fee, refundAddress);
@@ -97,6 +97,10 @@ contract StateSender is OAppUpgradeable {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
     }
 
+    function getStaticCallData() public view returns (bytes memory) {
+        return _getStaticCallData();
+    }
+
     function _getStaticCallData() internal view returns (bytes memory) {
         (bool success, bytes memory data) = target.staticcall(callData);
 
@@ -106,7 +110,7 @@ contract StateSender is OAppUpgradeable {
     }
 
     function _createMessage(bytes32 key, bytes memory stateData) internal view returns (bytes memory) {
-        return abi.encode(block.chainid, key, stateData, block.timestamp);
+        return abi.encode(version, key, stateData, uint64(block.timestamp));
     }
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {

@@ -37,11 +37,9 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
     /// @dev ynETHx vault on the forked chain (mainnet only in this base).
     address internal ynEthx;
-    uint256 internal expectedChainId;
 
-    function _initAfterFork(address ynEthx_, uint256 expectedChainId_) internal {
+    function _initAfterFork(address ynEthx_) internal {
         ynEthx = ynEthx_;
-        expectedChainId = expectedChainId_;
 
         TestHelperOz5.setUp();
         setUpEndpoints(2, LibraryType.UltraLightNode);
@@ -73,16 +71,16 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
 
         stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         assertEq(messageSink.lastMessage().length, 192, "message size");
-        (uint256 chainId, bytes32 key, bytes memory stateData, uint256 ts) =
-            abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
+        (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
+            abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
 
-        assertEq(chainId, block.chainid, "fork chain id");
-        assertEq(chainId, expectedChainId);
+        assertEq(msgVersion, 1, "relay version");
         assertEq(ts, block.timestamp);
         assertEq(stateData.length, 32);
         assertEq(abi.decode(stateData, (uint256)), expectedAssets);
@@ -93,6 +91,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 
     function _assertInsufficientNativeFeeReverts() internal {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
         vm.expectRevert("StateSender: insufficient native fee");
         stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
@@ -102,7 +101,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 contract StateRelayForkMainnetTest is StateRelayForkTestBase {
     function setUp() public override {
         vm.createSelectFork(vm.envString("ETH_MAINNET_RPC"));
-        _initAfterFork(YNETHX_MAINNET, 1);
+        _initAfterFork(YNETHX_MAINNET);
     }
 
     function test_fork_mainnet_sendState_relayedViaLzHelper_ynEthxConvertToAssets() public {
@@ -117,8 +116,7 @@ contract StateRelayForkMainnetTest is StateRelayForkTestBase {
 /**
  * @notice Reads `convertToAssets(1e18)` from **mainnet** ynETHx, then applies it on an **Arbitrum** fork via
  *         StateStore + StateReceiver (harness simulates LZ payload). Models production: L1 rate → L2 store.
- * @dev Wire format to the receiver is `abi.encode(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp)`
- *      (see `StateReceiver._decodePayload`), not the `StateSender` OApp blob (that path is covered on mainnet + MessageSink).
+ * @dev Wire format to the receiver is `abi.encode(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp)`.
  */
 contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayForkConstants {
     uint32 internal constant ARB_EID = 1;
@@ -200,7 +198,8 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnetToArbitrum_rateAdapter_revertsWhenDeliveryStale() public {
         (StateStore stateStore, bytes32 key,, uint256 deliveredAt) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        // Keep source window wider so this test isolates delivery-stale behavior.
+        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
 
         vm.warp(deliveredAt + STALENESS + 1);
         vm.expectRevert("StateReaderBase: delivery stale");

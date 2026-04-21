@@ -3,6 +3,7 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
+import {StateSenderQuoteHarness} from "test/mocks/StateSenderQuoteHarness.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MockRateTarget} from "test/mocks/MockRateTarget.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
@@ -15,6 +16,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
     uint32 constant DST_EID = 2;
 
     StateSender public stateSender;
+    StateSenderQuoteHarness public quoteHarness;
     MessageSink public messageSink;
     MockRateTarget public mockTarget;
 
@@ -29,10 +31,30 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender impl = new StateSender(address(endpoints[SRC_EID]));
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(mockTarget), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(mockTarget),
+                address(this),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
+
+        StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
+        bytes memory quoteInitData = abi.encodeCall(
+            StateSender.initialize,
+            (
+                address(this),
+                address(mockTarget),
+                address(this),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
+        );
+        ERC1967Proxy quoteProxy = new ERC1967Proxy(address(quoteImpl), quoteInitData);
+        quoteHarness = StateSenderQuoteHarness(address(quoteProxy));
 
         // MessageSink: (endpoint, delegate)
         address sinkAddr =
@@ -51,16 +73,17 @@ contract StateSenderTest is Test, TestHelperOz5 {
     function test_sendState_native_packetDelivered() public {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
         assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
 
         stateSender.sendState{value: fee.nativeFee}(DST_EID);
 
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
-        // abi.encode(chainId, key, stateData, timestamp): 32*4 + 32 (stateData len) + 32 (stateData) = 192
+        // abi.encode(version, key, stateData, srcTimestamp): 32*4 + 32 (stateData len) + 32 (stateData) = 192
         assertEq(messageSink.lastMessage().length, 192, "message size");
-        (uint256 chainId, bytes32 key, bytes memory stateData, uint256 ts) =
-            abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
-        assertEq(chainId, block.chainid);
+        (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
+            abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
+        assertEq(msgVersion, stateSender.version());
         assertEq(ts, block.timestamp);
         assertEq(stateData.length, 32);
         assertEq(abi.decode(stateData, (uint256)), 1e18);
@@ -73,6 +96,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
 
     function test_sendState_insufficientNativeFee_reverts() public {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
         vm.expectRevert("StateSender: insufficient native fee");
         stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
     }
@@ -90,12 +114,27 @@ contract StateSenderTest is Test, TestHelperOz5 {
         badSender.quoteSendState(DST_EID);
     }
 
+    function test_quoteSendState_lzTokenFee_reverts() public {
+        quoteHarness.setMockFee(1, 1);
+
+        vm.expectRevert(StateSender.StateSender_LzTokenPaymentNotSupported.selector);
+        quoteHarness.quoteSendState(DST_EID);
+    }
+
+    function test_sendState_lzTokenFee_reverts() public {
+        quoteHarness.setMockFee(1, 1);
+
+        vm.expectRevert(StateSender.StateSender_LzTokenPaymentNotSupported.selector);
+        quoteHarness.sendState{value: 1}(DST_EID);
+    }
+
     function test_deriveKey_matchesStoredKey() public {
         MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
+        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
         stateSender.sendState{value: fee.nativeFee}(DST_EID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
-        (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint256, bytes32, bytes, uint256));
+        (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
         bytes32 expectedKey = KeyDerivation.deriveKey(
             block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
