@@ -44,7 +44,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     function write(bytes32 key, bytes calldata value, uint64 srcTimestamp) external {
         require(isWriter(msg.sender), "StateStore: not writer");
         Entry storage e = _entries[key];
-        require(srcTimestamp > e.srcTimestamp, "StateStore: stale");
+        require(srcTimestamp >= e.srcTimestamp, "StateStore: stale");
         e.value = value;
         e.srcTimestamp = srcTimestamp;
         e.updatedAt = uint64(block.timestamp);

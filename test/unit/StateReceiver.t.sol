@@ -70,11 +70,20 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(abi.decode(stored, (uint256)), 2e18);
     }
 
-    function test_receivePayload_staleTimestamp_reverts() public {
+    function test_receivePayload_staleTimestamp_same_block_no_revert() public {
         uint64 ts = uint64(block.timestamp);
         receiver.receivePayload(abi.encode(uint8(1), KEY, abi.encode(uint256(1e18)), ts));
 
-        vm.expectRevert("StateStore: stale");
+        receiver.receivePayload(abi.encode(uint8(1), KEY, abi.encode(uint256(2e18)), ts));
+    }
+
+    function test_receivePayload__non_staleTimestamp_future_block_no_revert(uint256 blocksPassed) public {
+        vm.assume(blocksPassed < 100000);
+        uint64 ts = uint64(block.timestamp);
+        receiver.receivePayload(abi.encode(uint8(1), KEY, abi.encode(uint256(1e18)), ts));
+
+        vm.roll(block.number + blocksPassed);
+   
         receiver.receivePayload(abi.encode(uint8(1), KEY, abi.encode(uint256(2e18)), ts));
     }
 }
