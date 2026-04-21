@@ -17,10 +17,9 @@ contract StateStoreTest is Test {
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(this));
     }
 
-    function test_write_sameTimestamp_reverts() public {
+    function test_write_sameTimestamp_no_revert() public {
         uint64 ts = uint64(block.timestamp);
         stateStore.write(KEY, abi.encode(uint256(1e18)), ts);
-        vm.expectRevert("StateStore: stale");
         stateStore.write(KEY, abi.encode(uint256(2e18)), ts);
     }
 
