@@ -24,6 +24,6 @@ remappings = [
     "solidity-bytes-utils/=lib/solidity-bytes-utils/",
 ]
 
-# Fork tests: `forge test --match-contract StateRelayFork` — set ETH_MAINNET_RPC / ARBITRUM_RPC in `.env` (stable RPC; public URLs often flake)
+# Fork tests: `forge test --match-contract StateRelayFork --rpc-url <MAINNET_RPC>` — set ARBITRUM_RPC in `.env` for the multi-fork test (stable RPC; public URLs often flake)
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

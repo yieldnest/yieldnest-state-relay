@@ -24,9 +24,9 @@ abstract contract StateRelayForkConstants {
 
 /**
  * @notice Fork real chain state for staticcalls; delivery uses TestHelperOz5 (`verifyPackets`) in-process — not two live chains talking.
- * @dev Mainnet-only sender + MessageSink. Run: `forge test --match-contract StateRelayFork`.
- * @dev RPC: use reliable URLs in `ETH_MAINNET_RPC` / `ARBITRUM_RPC` (`.env`). Public RPCs often cause
- *      `failed to get storage` / `upstream connect error` / invalid JSON during `createSelectFork` or storage reads.
+ * @dev Mainnet-only sender + MessageSink. Run: `forge test --match-contract StateRelayFork --rpc-url <MAINNET_RPC>`.
+ * @dev RPC: pass a reliable mainnet URL via `--rpc-url`; set `ARBITRUM_RPC` in `.env` for the multi-fork test.
+ *      Public RPCs often cause `failed to get storage` / `upstream connect error` / invalid JSON during storage reads.
  */
 abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkConstants {
     uint32 internal constant SRC_EID = 1;
@@ -100,7 +100,6 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
 /// @dev ynETHx on Ethereum mainnet (YieldNest app / docs).
 contract StateRelayForkMainnetTest is StateRelayForkTestBase {
     function setUp() public override {
-        vm.createSelectFork(vm.envString("ETH_MAINNET_RPC"));
         _initAfterFork(YNETHX_MAINNET);
     }
 
@@ -128,7 +127,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     uint256 internal constant STALENESS = 1 hours;
 
     function setUp() public override {
-        forkMainnet = vm.createFork(vm.envString("ETH_MAINNET_RPC"));
+        forkMainnet = vm.activeFork();
         forkArb = vm.createFork(vm.envString("ARBITRUM_RPC"));
     }
 
