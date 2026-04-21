@@ -13,7 +13,7 @@ contract StateReceiver is OAppUpgradeable {
     StateStore public stateStore;
     mapping(uint8 => bool) public supportedVersions;
 
-    event SupportedVersionSet(uint8 version, bool supported);
+    event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
     event StateReceived(bytes32 key, bytes value, uint64 srcTimestamp);
     event UnsupportedVersionReceived(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -30,8 +30,8 @@ contract StateReceiver is OAppUpgradeable {
     }
 
     function setSupportedVersion(uint8 version, bool supported) external onlyOwner {
+        emit SupportedVersionSet(version, supportedVersions[version], supported);
         supportedVersions[version] = supported;
-        emit SupportedVersionSet(version, supported);
     }
 
     function _decodePayload(bytes calldata message)

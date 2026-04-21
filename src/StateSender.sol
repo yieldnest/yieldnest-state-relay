@@ -22,10 +22,10 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
     uint8 public version;
 
     event StateSent(bytes32 key, uint32 dstEid, bytes message);
-    event TargetSet(address target);
-    event RefundAddressSet(address refundAddress);
-    event CallDataSet(bytes callData);
-    event VersionSet(uint8 version);
+    event TargetSet(address previousTarget, address newTarget);
+    event RefundAddressSet(address previousRefundAddress, address newRefundAddress);
+    event CallDataSet(bytes previousCallData, bytes newCallData);
+    event VersionSet(uint8 previousVersion, uint8 newVersion);
     error StateSender_LzTokenPaymentNotSupported();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -56,23 +56,23 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
     }
 
     function setTarget(address _target) external onlyRole(CONFIG_MANAGER_ROLE) {
+        emit TargetSet(target, _target);
         target = _target;
-        emit TargetSet(_target);
     }
 
     function setRefundAddress(address _refundAddress) external onlyRole(CONFIG_MANAGER_ROLE) {
+        emit RefundAddressSet(refundAddress, _refundAddress);
         refundAddress = _refundAddress;
-        emit RefundAddressSet(_refundAddress);
     }
 
     function setCallData(bytes memory _callData) external onlyRole(CONFIG_MANAGER_ROLE) {
+        emit CallDataSet(callData, _callData);
         callData = _callData;
-        emit CallDataSet(_callData);
     }
 
     function setVersion(uint8 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
+        emit VersionSet(version, _version);
         version = _version;
-        emit VersionSet(_version);
     }
 
     /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
