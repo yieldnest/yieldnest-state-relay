@@ -27,11 +27,10 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     mapping(bytes32 => Entry) private _entries;
 
     event StateUpdated(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 updatedAt);
+    event StateIgnored(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
 
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
-    error StateStore_Stale();
-
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -52,15 +51,19 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function write(bytes32 key, StateUpdate calldata update) external {
+    function write(bytes32 key, StateUpdate calldata update) external returns (bool written) {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         Entry storage e = _entries[key];
-        if (update.srcTimestamp < e.srcTimestamp) revert StateStore_Stale();
+        if (update.srcTimestamp <= e.srcTimestamp) {
+            emit StateIgnored(key, update.version, update.srcTimestamp, e.srcTimestamp);
+            return false;
+        }
         e.value = update.value;
         e.version = update.version;
         e.srcTimestamp = update.srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
         emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
+        return true;
     }
 
     function get(bytes32 key) external view returns (Entry memory) {

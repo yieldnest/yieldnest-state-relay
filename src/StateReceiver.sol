@@ -15,6 +15,7 @@ contract StateReceiver is OAppUpgradeable {
 
     event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
     event MessageReceived(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp);
+    event StaleMessageIgnored(uint8 version, bytes32 key, uint64 srcTimestamp);
 
     error StateReceiver_InvalidOwner();
     error StateReceiver_InvalidStateStore();
@@ -55,7 +56,12 @@ contract StateReceiver is OAppUpgradeable {
         // Revert on unsupported versions so LayerZero retains the message for retry after upgrade.
         if (!supportedVersions[version]) revert StateReceiver_UnsupportedVersion(version);
 
-        stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
-        emit MessageReceived(version, key, value, srcTimestamp);
+        bool written =
+            stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
+        if (written) {
+            emit MessageReceived(version, key, value, srcTimestamp);
+        } else {
+            emit StaleMessageIgnored(version, key, srcTimestamp);
+        }
     }
 }

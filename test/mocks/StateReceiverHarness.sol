@@ -16,7 +16,12 @@ contract StateReceiverHarness is StateReceiver {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint8, bytes32, bytes, uint64));
         if (!supportedVersions[version]) revert StateReceiver_UnsupportedVersion(version);
-        stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
-        emit MessageReceived(version, key, value, srcTimestamp);
+        bool written =
+            stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
+        if (written) {
+            emit MessageReceived(version, key, value, srcTimestamp);
+        } else {
+            emit StaleMessageIgnored(version, key, srcTimestamp);
+        }
     }
 }
