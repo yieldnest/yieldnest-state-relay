@@ -47,11 +47,17 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
         emit DestinationSet(destinationId, lzEid, peer, options, enabled);
     }
 
-    function quoteSend(uint256 destinationId, bytes calldata message) external view returns (uint256 nativeFee) {
+    function quoteSend(uint256 destinationId, bytes calldata message)
+        external
+        view
+        returns (TransportQuote memory quote)
+    {
         DestinationConfig storage destination = _getDestinationOrRevert(destinationId);
         MessagingFee memory fee = _quote(destination.lzEid, message, destination.options, false);
-        if (fee.lzTokenFee != 0) revert LayerZeroStateRelayTransport_LzTokenPaymentNotSupported();
-        return fee.nativeFee;
+        if (fee.lzTokenFee != 0) {
+            return TransportQuote({token: endpoint.lzToken(), feeAmount: fee.lzTokenFee, nativeFee: false});
+        }
+        return TransportQuote({token: address(0), feeAmount: fee.nativeFee, nativeFee: true});
     }
 
     function send(uint256 destinationId, bytes calldata message, address refundTo) external payable {

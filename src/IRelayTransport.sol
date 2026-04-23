@@ -2,7 +2,16 @@
 pragma solidity ^0.8.22;
 
 interface IRelayTransport {
-    function quoteSend(uint256 destinationId, bytes calldata message) external view returns (uint256 nativeFee);
+    struct TransportQuote {
+        address token;
+        uint256 feeAmount;
+        bool nativeFee;
+    }
+
+    function quoteSend(uint256 destinationId, bytes calldata message)
+        external
+        view
+        returns (TransportQuote memory quote);
 
     function send(uint256 destinationId, bytes calldata message, address refundTo) external payable;
 }

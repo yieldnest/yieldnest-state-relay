@@ -136,7 +136,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         quoteHarness.setMockFee(1, 1);
         stateSender.setTransport(address(quoteHarness));
 
-        vm.expectRevert(LayerZeroStateRelayTransport.LayerZeroStateRelayTransport_LzTokenPaymentNotSupported.selector);
+        vm.expectRevert(StateSender.StateSender_NonNativeFeeUnsupported.selector);
         stateSender.quoteSendState(DST_CHAIN_ID);
     }
 
@@ -144,7 +144,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         quoteHarness.setMockFee(1, 1);
         stateSender.setTransport(address(quoteHarness));
 
-        vm.expectRevert(LayerZeroStateRelayTransport.LayerZeroStateRelayTransport_LzTokenPaymentNotSupported.selector);
+        vm.expectRevert(StateSender.StateSender_NonNativeFeeUnsupported.selector);
         stateSender.sendState{value: 1}(DST_CHAIN_ID);
     }
 

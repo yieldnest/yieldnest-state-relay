@@ -23,6 +23,7 @@ contract StateSender is AccessControlUpgradeable {
     event CallDataSet(bytes previousCallData, bytes newCallData);
     event VersionSet(uint8 previousVersion, uint8 newVersion);
     error StateSender_InsufficientNativeFee();
+    error StateSender_NonNativeFeeUnsupported();
     error StateSender_StaticcallFailed();
     error StateSender_InvalidTransport();
 
@@ -67,15 +68,18 @@ contract StateSender is AccessControlUpgradeable {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        return transport.quoteSend(destinationId, message);
+        IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
+        if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
+        return quote.feeAmount;
     }
 
     function sendState(uint256 destinationId) external payable {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        uint256 nativeFee = transport.quoteSend(destinationId, message);
-        if (msg.value < nativeFee) revert StateSender_InsufficientNativeFee();
+        IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
+        if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
+        if (msg.value < quote.feeAmount) revert StateSender_InsufficientNativeFee();
         transport.send{value: msg.value}(destinationId, message, msg.sender);
         emit StateSent(key, destinationId, message);
     }
