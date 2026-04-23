@@ -85,10 +85,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         require(ok, "fork: convertToAssets staticcall failed");
         uint256 expectedAssets = abi.decode(ret, (uint256));
 
-        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
-        assertTrue(fee > 0, "expected non-zero native fee");
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+        assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee}(DST_CHAIN_ID);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         assertEq(messageSink.lastMessage().length, 192, "message size");
@@ -101,13 +101,15 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         assertEq(abi.decode(stateData, (uint256)), expectedAssets);
 
         bytes32 expectedKey = KeyDerivation.deriveKey(block.chainid, ynEthx, CONVERT_TO_ASSETS_CALLDATA);
+        assertEq(quoteData.key, expectedKey);
+        assertEq(quoteData.message, messageSink.lastMessage());
         assertEq(key, expectedKey);
     }
 
     function _assertInsufficientNativeFeeReverts() internal {
-        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
-        stateSender.sendState{value: fee - 1}(DST_CHAIN_ID);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount - 1}(DST_CHAIN_ID);
     }
 }
 

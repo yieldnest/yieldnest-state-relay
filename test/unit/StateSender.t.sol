@@ -85,10 +85,10 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_sendState_native_packetDelivered() public {
-        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
-        assertTrue(fee > 0, "expected non-zero native fee");
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+        assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee}(DST_CHAIN_ID);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
 
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
@@ -104,13 +104,15 @@ contract StateSenderTest is Test, TestHelperOz5 {
         bytes32 expectedKey = KeyDerivation.deriveKey(
             block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
+        assertEq(quoteData.key, expectedKey);
+        assertEq(quoteData.message, messageSink.lastMessage());
         assertEq(key, expectedKey);
     }
 
     function test_sendState_insufficientNativeFee_reverts() public {
-        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
-        stateSender.sendState{value: fee - 1}(DST_CHAIN_ID);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount - 1}(DST_CHAIN_ID);
     }
 
     function test_staticcallFailure_reverts() public {
@@ -149,14 +151,15 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_deriveKey_matchesStoredKey() public {
-        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
-        stateSender.sendState{value: fee}(DST_CHAIN_ID);
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
         bytes32 expectedKey = KeyDerivation.deriveKey(
             block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
         );
+        assertEq(quoteData.key, expectedKey);
         assertEq(key, expectedKey);
     }
 }

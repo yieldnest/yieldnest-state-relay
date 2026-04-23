@@ -12,6 +12,12 @@ import {IRelayTransport} from "./IRelayTransport.sol";
 contract StateSender is AccessControlUpgradeable {
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
 
+    struct SendStateQuote {
+        IRelayTransport.TransportQuote transportQuote;
+        bytes32 key;
+        bytes message;
+    }
+
     IRelayTransport public transport;
     address public target;
     bytes public callData;
@@ -64,24 +70,20 @@ contract StateSender is AccessControlUpgradeable {
         version = _version;
     }
 
-    function quoteSendState(uint256 destinationId) external view returns (uint256 nativeFee) {
+    function quoteSendState(uint256 destinationId) public view returns (SendStateQuote memory quoteData) {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
         IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
         if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
-        return quote.feeAmount;
+        return SendStateQuote({transportQuote: quote, key: key, message: message});
     }
 
     function sendState(uint256 destinationId) external payable {
-        bytes memory stateData = _getStaticCallData();
-        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
-        bytes memory message = _createMessage(key, stateData);
-        IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
-        if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
-        if (msg.value < quote.feeAmount) revert StateSender_InsufficientNativeFee();
-        transport.send{value: msg.value}(destinationId, message, msg.sender);
-        emit StateSent(key, destinationId, message);
+        SendStateQuote memory quoteData = quoteSendState(destinationId);
+        if (msg.value < quoteData.transportQuote.feeAmount) revert StateSender_InsufficientNativeFee();
+        transport.send{value: msg.value}(destinationId, quoteData.message, msg.sender);
+        emit StateSent(quoteData.key, destinationId, quoteData.message);
     }
 
     function getStaticCallData() public view returns (bytes memory) {
