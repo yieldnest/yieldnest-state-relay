@@ -131,7 +131,7 @@ contract StateRelayForkMainnetTest is StateRelayForkTestBase {
 /**
  * @notice Reads `convertToAssets(1e18)` from **mainnet** ynETHx, then applies it on an **Arbitrum** fork via
  *         StateStore + StateReceiver (harness simulates LZ payload). Models production: L1 rate → L2 store.
- * @dev Wire format to the receiver is `abi.encode(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp)`.
+ * @dev Wire format to the receiver is `abi.encode(uint256 version, bytes32 key, bytes value, uint64 srcTimestamp)`.
  */
 contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayForkConstants {
     uint32 internal constant ARB_EID = 1;
@@ -182,7 +182,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
 
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
 
-        bytes memory message = abi.encode(uint8(1), key, stateData, srcTs);
+        bytes memory message = abi.encode(uint256(1), key, stateData, srcTs);
         receiver.receivePayload(message);
 
         deliveredAt = block.timestamp;

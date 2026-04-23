@@ -21,13 +21,13 @@ contract StateSender is AccessControlUpgradeable {
     IRelayTransport public transport;
     address public target;
     bytes public callData;
-    uint8 public version;
+    uint256 public version;
 
     event StateSent(bytes32 key, uint256 destinationId, bytes message);
     event TransportSet(address previousTransport, address newTransport);
     event TargetSet(address previousTarget, address newTarget);
     event CallDataSet(bytes previousCallData, bytes newCallData);
-    event VersionSet(uint8 previousVersion, uint8 newVersion);
+    event VersionSet(uint256 previousVersion, uint256 newVersion);
     error StateSender_InsufficientNativeFee();
     error StateSender_NonNativeFeeUnsupported();
     error StateSender_StaticcallFailed();
@@ -38,7 +38,7 @@ contract StateSender is AccessControlUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address _owner, address _transport, address _target, bytes memory _callData, uint8 _version)
+    function initialize(address _owner, address _transport, address _target, bytes memory _callData, uint256 _version)
         external
         initializer
     {
@@ -65,7 +65,7 @@ contract StateSender is AccessControlUpgradeable {
         callData = _callData;
     }
 
-    function setVersion(uint8 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
+    function setVersion(uint256 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
         emit VersionSet(version, _version);
         version = _version;
     }

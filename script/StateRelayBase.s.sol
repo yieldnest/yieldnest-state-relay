@@ -22,7 +22,7 @@ contract StateRelayBase is BaseData {
         address target;
         bytes callData;
         address refundAddress;
-        uint8 protocolVersion;
+        uint256 protocolVersion;
     }
 
     string internal deploymentRelativePathOverride;
@@ -116,7 +116,7 @@ contract StateRelayBase is BaseData {
             address target = vm.parseJsonAddress(json, string.concat(sp, ".target"));
             bytes memory callData = vm.parseJsonBytes(json, string.concat(sp, ".callData"));
             address refund = vm.parseJsonAddress(json, string.concat(sp, ".refundAddress"));
-            uint8 pVer = uint8(vm.parseJsonUint(json, string.concat(sp, ".protocolVersion")));
+            uint256 pVer = vm.parseJsonUint(json, string.concat(sp, ".protocolVersion"));
             require(target != address(0), "StateRelay: sender target");
             require(callData.length > 0, "StateRelay: sender callData");
             require(isSupportedChainId(sChain), "StateRelay: sender chainId not in BaseData");

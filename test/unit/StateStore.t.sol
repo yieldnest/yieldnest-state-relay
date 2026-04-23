@@ -54,7 +54,7 @@ contract StateStoreTest is Test {
     }
 
     function test_write_unsupportedVersion_reverts() public {
-        vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint8(2)));
+        vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint256(2)));
         stateStore.write(KEY, StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 2, srcTimestamp: 1}));
     }
 }

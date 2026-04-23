@@ -11,13 +11,13 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
 contract StateStore is Initializable, AccessControlUpgradeable {
     struct StateUpdate {
         bytes value;
-        uint8 version;
+        uint256 version;
         uint64 srcTimestamp;
     }
 
     struct Entry {
         bytes value;
-        uint8 version;
+        uint256 version;
         uint64 srcTimestamp;
         uint64 updatedAt;
     }
@@ -26,22 +26,22 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         bool written;
         bytes32 key;
         bytes value;
-        uint8 version;
+        uint256 version;
         uint64 srcTimestamp;
     }
 
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
-    mapping(uint8 => bool) public supportedVersions;
+    mapping(uint256 => bool) public supportedVersions;
 
-    event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
-    event StateUpdated(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 updatedAt);
-    event StateIgnored(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
+    event SupportedVersionSet(uint256 version, bool previousSupported, bool newSupported);
+    event StateUpdated(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt);
+    event StateIgnored(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
 
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
-    error StateStore_UnsupportedVersion(uint8 version);
+    error StateStore_UnsupportedVersion(uint256 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -64,14 +64,14 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function setSupportedVersion(uint8 version, bool supported) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSupportedVersion(uint256 version, bool supported) external onlyRole(DEFAULT_ADMIN_ROLE) {
         emit SupportedVersionSet(version, supportedVersions[version], supported);
         supportedVersions[version] = supported;
     }
 
     function write(bytes calldata message) external returns (WriteResult memory result) {
-        (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
-            abi.decode(message, (uint8, bytes32, bytes, uint64));
+        (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
+            abi.decode(message, (uint256, bytes32, bytes, uint64));
         StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
         return _write(key, update);
     }

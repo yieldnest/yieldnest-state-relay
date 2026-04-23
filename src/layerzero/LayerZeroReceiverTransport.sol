@@ -12,8 +12,8 @@ import {StateStore} from "../StateStore.sol";
 contract LayerZeroReceiverTransport is OAppUpgradeable {
     StateStore public stateStore;
 
-    event MessageReceived(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp);
-    event StaleMessageIgnored(uint8 version, bytes32 key, uint64 srcTimestamp);
+    event MessageReceived(uint256 version, bytes32 key, bytes value, uint64 srcTimestamp);
+    event StaleMessageIgnored(uint256 version, bytes32 key, uint64 srcTimestamp);
 
     error LayerZeroReceiverTransport_InvalidOwner();
     error LayerZeroReceiverTransport_InvalidStateStore();
