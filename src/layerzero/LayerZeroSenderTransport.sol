@@ -29,12 +29,24 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the LayerZero sender transport.
+     * @param _owner Owner and LayerZero delegate for this transport.
+     */
     function initialize(address _owner) external initializer {
         if (_owner == address(0)) revert LayerZeroSenderTransport_InvalidOwner();
         __Ownable_init(_owner);
         __OApp_init(_owner);
     }
 
+    /**
+     * @notice Configures a destination route for LayerZero sends.
+     * @param destinationId Application-level destination identifier.
+     * @param lzEid LayerZero endpoint ID for the destination.
+     * @param peer Trusted peer address encoded as bytes32.
+     * @param options LayerZero executor options used for sends to the destination.
+     * @param enabled Whether the destination is currently enabled.
+     */
     function setDestination(
         uint256 destinationId,
         uint32 lzEid,
@@ -47,6 +59,9 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
         emit DestinationSet(destinationId, lzEid, peer, options, enabled);
     }
 
+    /**
+     * @inheritdoc IRelayTransport
+     */
     function quoteSend(uint256 destinationId, bytes calldata message)
         external
         view
@@ -60,6 +75,9 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
         return TransportQuote({token: address(0), feeAmount: fee.nativeFee, nativeFee: true});
     }
 
+    /**
+     * @inheritdoc IRelayTransport
+     */
     function send(uint256 destinationId, bytes calldata message, address refundTo) external payable {
         DestinationConfig storage destination = _getDestinationOrRevert(destinationId);
         MessagingFee memory fee = _quote(destination.lzEid, message, destination.options, false);

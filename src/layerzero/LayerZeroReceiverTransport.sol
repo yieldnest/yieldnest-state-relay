@@ -22,6 +22,11 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the LayerZero receiver transport with its backing state store.
+     * @param _owner Owner and LayerZero delegate for this transport.
+     * @param _stateStore Store that will validate and persist inbound relay messages.
+     */
     function initialize(address _owner, address _stateStore) external initializer {
         if (_owner == address(0)) revert LayerZeroReceiverTransport_InvalidOwner();
         if (_stateStore == address(0)) revert LayerZeroReceiverTransport_InvalidStateStore();

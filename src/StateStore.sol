@@ -48,6 +48,11 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the store and seeds its initial writer set.
+     * @param owner_ Address granted the default admin, version-manager, and writer-manager roles.
+     * @param writers_ Addresses granted the writer role at initialization.
+     */
     function initialize(address owner_, address[] memory writers_) external initializer {
         __AccessControl_init();
         if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
@@ -62,15 +67,30 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         supportedVersions[1] = true;
     }
 
+    /**
+     * @notice Returns whether an account is authorized to write relay updates.
+     * @param account Address to query.
+     * @return True if `account` holds `WRITER_ROLE`.
+     */
     function isWriter(address account) public view returns (bool) {
         return hasRole(WRITER_ROLE, account);
     }
 
+    /**
+     * @notice Enables or disables a supported relay message version.
+     * @param version Version value to update.
+     * @param supported Whether the version should be accepted.
+     */
     function setSupportedVersion(uint256 version, bool supported) external onlyRole(VERSION_MANAGER_ROLE) {
         emit SupportedVersionSet(version, supportedVersions[version], supported);
         supportedVersions[version] = supported;
     }
 
+    /**
+     * @notice Decodes a raw relay payload and applies it to the store.
+     * @param message Encoded relay payload containing version, key, value, and source timestamp.
+     * @return result Structured write result including whether storage changed.
+     */
     function write(bytes calldata message) external returns (WriteResult memory result) {
         (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint256, bytes32, bytes, uint64));
@@ -78,6 +98,12 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return _write(key, update);
     }
 
+    /**
+     * @notice Applies a decoded state update for a specific key.
+     * @param key Deterministic relay key for the value being written.
+     * @param update Decoded state update payload.
+     * @return result Structured write result including whether storage changed.
+     */
     function write(bytes32 key, StateUpdate calldata update) external returns (WriteResult memory result) {
         return _write(key, update);
     }
@@ -110,6 +136,11 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         });
     }
 
+    /**
+     * @notice Returns the stored entry for a relay key.
+     * @param key Deterministic relay key to read.
+     * @return Stored entry for `key`.
+     */
     function get(bytes32 key) external view returns (Entry memory) {
         return _entries[key];
     }

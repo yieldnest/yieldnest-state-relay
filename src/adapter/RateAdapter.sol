@@ -12,11 +12,18 @@ contract RateAdapter is StateReaderBase {
         StateReaderBase(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness)
     {}
 
+    /**
+     * @notice Returns the decoded relayed rate value.
+     * @return Current rate stored under the configured relay key.
+     */
     function getRate() external view returns (uint256) {
         return abi.decode(_getValue(), (uint256));
     }
 
-    /// @dev Alias for tests / consumers that refer to the rate key
+    /**
+     * @notice Returns the relay key used by this adapter.
+     * @return Relay key read from the state store.
+     */
     function rateKey() external view returns (bytes32) {
         return stateKey;
     }

@@ -38,6 +38,14 @@ contract StateSender is AccessControlUpgradeable {
         _disableInitializers();
     }
 
+    /**
+     * @notice Initializes the sender app with its transport and read target configuration.
+     * @param _owner Address granted admin and config-manager roles.
+     * @param _transport Transport adapter used to quote and send relay messages.
+     * @param _target Contract queried via `staticcall` for relay state.
+     * @param _callData Calldata used for the state read on `_target`.
+     * @param _version Version value encoded into outbound relay messages.
+     */
     function initialize(address _owner, address _transport, address _target, bytes memory _callData, uint256 _version)
         external
         initializer
@@ -51,25 +59,46 @@ contract StateSender is AccessControlUpgradeable {
         version = _version;
     }
 
+    /**
+     * @notice Updates the transport adapter used for quoting and sending messages.
+     * @param _transport Address of the new transport adapter.
+     */
     function setTransport(address _transport) external onlyRole(CONFIG_MANAGER_ROLE) {
         _setTransport(_transport);
     }
 
+    /**
+     * @notice Updates the source contract queried for relay state.
+     * @param _target Address of the new read target.
+     */
     function setTarget(address _target) external onlyRole(CONFIG_MANAGER_ROLE) {
         emit TargetSet(target, _target);
         target = _target;
     }
 
+    /**
+     * @notice Updates the calldata used to read state from the target contract.
+     * @param _callData New calldata payload for the source-chain `staticcall`.
+     */
     function setCallData(bytes memory _callData) external onlyRole(CONFIG_MANAGER_ROLE) {
         emit CallDataSet(callData, _callData);
         callData = _callData;
     }
 
+    /**
+     * @notice Updates the version encoded into outbound relay messages.
+     * @param _version New message version value.
+     */
     function setVersion(uint256 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
         emit VersionSet(version, _version);
         version = _version;
     }
 
+    /**
+     * @notice Quotes a relay send for a destination and returns the built payload metadata.
+     * @param destinationId Application-level destination identifier understood by the transport.
+     * @return quoteData Transport quote, derived key, and encoded message for the send.
+     */
     function quoteSendState(uint256 destinationId) public view returns (SendStateQuote memory quoteData) {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
@@ -79,6 +108,10 @@ contract StateSender is AccessControlUpgradeable {
         return SendStateQuote({transportQuote: quote, key: key, message: message});
     }
 
+    /**
+     * @notice Reads the current state, quotes the fee, and sends the relay message.
+     * @param destinationId Application-level destination identifier understood by the transport.
+     */
     function sendState(uint256 destinationId) external payable {
         SendStateQuote memory quoteData = quoteSendState(destinationId);
         if (msg.value < quoteData.transportQuote.feeAmount) revert StateSender_InsufficientNativeFee();
@@ -86,6 +119,10 @@ contract StateSender is AccessControlUpgradeable {
         emit StateSent(quoteData.key, destinationId, quoteData.message);
     }
 
+    /**
+     * @notice Returns the raw bytes read from the configured target contract.
+     * @return Encoded return data from the configured `staticcall`.
+     */
     function getStaticCallData() public view returns (bytes memory) {
         return _getStaticCallData();
     }
