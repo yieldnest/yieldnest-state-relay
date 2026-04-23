@@ -2,8 +2,8 @@
 pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
-import {RateAdapter} from "src/adapter/RateAdapter.sol";
-import {StateReaderBase} from "src/StateReaderBase.sol";
+import {RateAdapterUpgradeable} from "src/adapter/RateAdapterUpgradeable.sol";
+import {StateReaderBaseUpgradeable} from "src/StateReaderBaseUpgradeable.sol";
 import {StateStore} from "src/StateStore.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -11,7 +11,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 contract TestRateAdapterTest is Test {
     uint256 constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
     StateStore public stateStore;
-    RateAdapter public rateAdapter;
+    RateAdapterUpgradeable public rateAdapter;
     bytes32 public rateKey;
 
     uint256 constant STALENESS = 1 hours;
@@ -23,10 +23,14 @@ contract TestRateAdapterTest is Test {
         stateStore = StateStore(address(proxy));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(this));
         rateKey = KeyDerivation.deriveKey(block.chainid, address(0x123), hex"679aefce");
-        rateAdapter = new RateAdapter(address(stateStore), rateKey, STALENESS, STALENESS);
+        RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
+        bytes memory adapterInit =
+            abi.encodeCall(RateAdapterUpgradeable.initialize, (address(stateStore), rateKey, STALENESS, STALENESS));
+        ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
+        rateAdapter = RateAdapterUpgradeable(address(adapterProxy));
     }
 
-    // --- RateAdapter: decode value (StateSender sends abi.encode(uint256)) ---
+    // --- RateAdapterUpgradeable: decode value (StateSender sends abi.encode(uint256)) ---
 
     function test_getRate_returnsDecodedUint256() public {
         uint256 rate = 1e18;
@@ -52,7 +56,7 @@ contract TestRateAdapterTest is Test {
         assertEq(rateAdapter.getRate(), 99e6);
     }
 
-    // --- StateReaderBase: staleness checks ---
+    // --- StateReaderBaseUpgradeable: staleness checks ---
 
     function test_getRate_sourceStale_reverts() public {
         stateStore.write(
@@ -60,7 +64,7 @@ contract TestRateAdapterTest is Test {
             StateStore.StateUpdate({value: abi.encode(1e18), version: 1, srcTimestamp: uint64(block.timestamp)})
         );
         vm.warp(block.timestamp + STALENESS + 1);
-        vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
+        vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_SourceStale.selector);
         rateAdapter.getRate();
     }
 
@@ -71,7 +75,7 @@ contract TestRateAdapterTest is Test {
             StateStore.StateUpdate({value: abi.encode(1e18), version: 1, srcTimestamp: uint64(block.timestamp)})
         );
         vm.warp(block.timestamp + STALENESS + 1);
-        vm.expectRevert(StateReaderBase.StateReaderBase_SourceStale.selector);
+        vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_SourceStale.selector);
         rateAdapter.getRate();
     }
 
@@ -105,11 +109,11 @@ contract TestRateAdapterTest is Test {
                 srcTimestamp: uint64(block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW + 1)
             })
         );
-        vm.expectRevert(StateReaderBase.StateReaderBase_SourceTimestampInFuture.selector);
+        vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_SourceTimestampInFuture.selector);
         rateAdapter.getRate();
     }
 
-    // --- StateReaderBase: config stored correctly ---
+    // --- StateReaderBaseUpgradeable: config stored correctly ---
 
     function test_rateAdapter_config() public view {
         assertEq(address(rateAdapter.stateStore()), address(stateStore));

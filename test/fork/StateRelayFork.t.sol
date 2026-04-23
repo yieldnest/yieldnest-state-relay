@@ -9,8 +9,8 @@ import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
 import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
 import {StateStore} from "src/StateStore.sol";
-import {RateAdapter} from "src/adapter/RateAdapter.sol";
-import {StateReaderBase} from "src/StateReaderBase.sol";
+import {RateAdapterUpgradeable} from "src/adapter/RateAdapterUpgradeable.sol";
+import {StateReaderBaseUpgradeable} from "src/StateReaderBaseUpgradeable.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -78,6 +78,17 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         arr = new address[](2);
         arr[0] = a;
         arr[1] = b;
+    }
+
+    function _deployRateAdapter(address stateStore_, bytes32 key, uint256 maxSrcStaleness, uint256 maxDstStaleness)
+        internal
+        returns (RateAdapterUpgradeable)
+    {
+        RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
+        bytes memory adapterInit =
+            abi.encodeCall(RateAdapterUpgradeable.initialize, (stateStore_, key, maxSrcStaleness, maxDstStaleness));
+        ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
+        return RateAdapterUpgradeable(address(adapterProxy));
     }
 
     function _assertYnEthxConvertToAssetsRelayed() internal {
@@ -195,7 +206,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnet_convertToAssets_writtenOnArbitrumStateStore() public {
         (StateStore stateStore, bytes32 key, uint256 expectedRate,) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        RateAdapterUpgradeable adapter = _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS);
         assertEq(adapter.getRate(), expectedRate);
     }
 
@@ -203,7 +214,7 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnetToArbitrum_rateAdapter_passesShortStaleness() public {
         (StateStore stateStore, bytes32 key, uint256 expectedRate,) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        RateAdapterUpgradeable adapter = _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS);
         assertEq(adapter.maxSrcStaleness(), STALENESS);
         assertEq(adapter.maxDstStaleness(), STALENESS);
         assertEq(adapter.getRate(), expectedRate);
@@ -218,10 +229,11 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         (StateStore stateStore, bytes32 key,, uint256 deliveredAt) = _readMainnetAndDeliverToArbitrum();
 
         // Keep source window wider so this test isolates delivery-stale behavior.
-        RateAdapter adapter = new RateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
+        RateAdapterUpgradeable adapter =
+            _deployRateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
 
         vm.warp(deliveredAt + STALENESS + 1);
-        vm.expectRevert(StateReaderBase.StateReaderBase_DeliveryStale.selector);
+        vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_DeliveryStale.selector);
         adapter.getRate();
     }
 }
