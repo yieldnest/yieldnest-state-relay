@@ -6,7 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "./StateRelayBase.s.sol";
 import {StateSender} from "../src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "../src/layerzero/LayerZeroStateRelayTransport.sol";
+import {LayerZeroSenderTransport} from "../src/layerzero/LayerZeroSenderTransport.sol";
 
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
@@ -102,7 +102,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             if (senderAddr == address(0)) continue;
 
             address transportAddr = _senderTransport(senderAddr);
-            LayerZeroStateRelayTransport transport = LayerZeroStateRelayTransport(transportAddr);
+            LayerZeroSenderTransport transport = LayerZeroSenderTransport(transportAddr);
             _configurePeersSenderToReceiver(transport, dstOnlyReceiver, recvB32);
             _configureSendLibs(transportAddr, dstOnlyReceiver);
             _configureReceiveLibs(transportAddr, dstOnlyReceiver);
@@ -155,7 +155,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
     }
 
     function _configurePeersSenderToReceiver(
-        LayerZeroStateRelayTransport transport,
+        LayerZeroSenderTransport transport,
         uint256[] memory dstChainIds,
         bytes32 receiverPeer
     )

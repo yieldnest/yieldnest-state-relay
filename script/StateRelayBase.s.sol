@@ -8,8 +8,8 @@ import {BaseData} from "./BaseData.s.sol";
 
 import {StateStore} from "../src/StateStore.sol";
 import {StateSender} from "../src/StateSender.sol";
-import {StateReceiver} from "../src/StateReceiver.sol";
-import {LayerZeroStateRelayTransport} from "../src/layerzero/LayerZeroStateRelayTransport.sol";
+import {LayerZeroReceiverTransport} from "../src/layerzero/LayerZeroReceiverTransport.sol";
+import {LayerZeroSenderTransport} from "../src/layerzero/LayerZeroSenderTransport.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -227,8 +227,9 @@ contract StateRelayBase is BaseData {
 
         if (!isContract(stateReceiverOf[dstChainId])) {
             _startBroadcast();
-            StateReceiver recvImpl = new StateReceiver(lzEndpoint);
-            bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (relayOwner, stateStoreOf[dstChainId]));
+            LayerZeroReceiverTransport recvImpl = new LayerZeroReceiverTransport(lzEndpoint);
+            bytes memory recvInit =
+                abi.encodeCall(LayerZeroReceiverTransport.initialize, (relayOwner, stateStoreOf[dstChainId]));
             ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
             vm.stopBroadcast();
             stateReceiverOf[dstChainId] = address(recvProxy);
@@ -256,8 +257,8 @@ contract StateRelayBase is BaseData {
         }
 
         _startBroadcast();
-        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(lzEndpoint);
-        bytes memory transportInit = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (relayOwner));
+        LayerZeroSenderTransport transportImpl = new LayerZeroSenderTransport(lzEndpoint);
+        bytes memory transportInit = abi.encodeCall(LayerZeroSenderTransport.initialize, (relayOwner));
         ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInit);
 
         StateSender impl = new StateSender();
@@ -265,7 +266,7 @@ contract StateRelayBase is BaseData {
             StateSender.initialize, (relayOwner, address(transportProxy), s.target, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
-        LayerZeroStateRelayTransport(address(transportProxy)).setDestination(
+        LayerZeroSenderTransport(address(transportProxy)).setDestination(
             receiverChainId, getEID(receiverChainId), bytes32(0), defaultSendOptions(), true
         );
         vm.stopBroadcast();

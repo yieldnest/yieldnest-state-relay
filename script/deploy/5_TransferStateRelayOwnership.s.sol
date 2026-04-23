@@ -6,7 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "../StateRelayBase.s.sol";
 import {StateSender} from "../../src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "../../src/layerzero/LayerZeroStateRelayTransport.sol";
+import {LayerZeroSenderTransport} from "../../src/layerzero/LayerZeroSenderTransport.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -66,7 +66,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
                 console.log("StateSender [%s] roles -> OFT_OWNER", label);
             }
 
-            LayerZeroStateRelayTransport transport = LayerZeroStateRelayTransport(address(sender.transport()));
+            LayerZeroSenderTransport transport = LayerZeroSenderTransport(address(sender.transport()));
             if (transport.owner() != nextOwner) {
                 if (transport.owner() != relayOwner) revert NotOwner();
                 vm.broadcast(pk);

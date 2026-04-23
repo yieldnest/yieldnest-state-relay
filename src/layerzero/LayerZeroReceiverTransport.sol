@@ -3,13 +3,13 @@ pragma solidity ^0.8.22;
 
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
-import {StateStore} from "./StateStore.sol";
+import {StateStore} from "../StateStore.sol";
 
 /**
- * @title StateReceiver
+ * @title LayerZeroReceiverTransport
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).
  */
-contract StateReceiver is OAppUpgradeable {
+contract LayerZeroReceiverTransport is OAppUpgradeable {
     StateStore public stateStore;
     mapping(uint8 => bool) public supportedVersions;
 
@@ -17,15 +17,17 @@ contract StateReceiver is OAppUpgradeable {
     event MessageReceived(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp);
     event StaleMessageIgnored(uint8 version, bytes32 key, uint64 srcTimestamp);
 
-    error StateReceiver_InvalidOwner();
-    error StateReceiver_InvalidStateStore();
-    error StateReceiver_UnsupportedVersion(uint8 version);
+    error LayerZeroReceiverTransport_InvalidOwner();
+    error LayerZeroReceiverTransport_InvalidStateStore();
+    error LayerZeroReceiverTransport_UnsupportedVersion(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
+    constructor(address _endpoint) OAppUpgradeable(_endpoint) {
+        _disableInitializers();
+    }
 
     function initialize(address _owner, address _stateStore) external initializer {
-        if (_owner == address(0)) revert StateReceiver_InvalidOwner();
-        if (_stateStore == address(0)) revert StateReceiver_InvalidStateStore();
+        if (_owner == address(0)) revert LayerZeroReceiverTransport_InvalidOwner();
+        if (_stateStore == address(0)) revert LayerZeroReceiverTransport_InvalidStateStore();
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);
@@ -54,7 +56,7 @@ contract StateReceiver is OAppUpgradeable {
         (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
 
         // Revert on unsupported versions so LayerZero retains the message for retry after upgrade.
-        if (!supportedVersions[version]) revert StateReceiver_UnsupportedVersion(version);
+        if (!supportedVersions[version]) revert LayerZeroReceiverTransport_UnsupportedVersion(version);
 
         StateStore.WriteResult memory result =
             stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));

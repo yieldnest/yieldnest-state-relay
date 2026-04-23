@@ -2,7 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
-import {StateReceiver} from "src/StateReceiver.sol";
+import {LayerZeroReceiverTransport} from "src/layerzero/LayerZeroReceiverTransport.sol";
 import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
 import {StateStore} from "src/StateStore.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -25,7 +25,8 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         stateStore = StateStore(address(storeProxy));
 
         StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[EID]));
-        bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
+        bytes memory recvInit =
+            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         receiver = StateReceiverHarness(address(recvProxy));
 
@@ -49,7 +50,11 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         bytes memory value = abi.encode(uint256(1e18));
         bytes memory message = abi.encode(uint8(99), KEY, value, ts);
 
-        vm.expectRevert(abi.encodeWithSelector(StateReceiver.StateReceiver_UnsupportedVersion.selector, uint8(99)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LayerZeroReceiverTransport.LayerZeroReceiverTransport_UnsupportedVersion.selector, uint8(99)
+            )
+        );
         receiver.receivePayload(message);
 
         StateStore.Entry memory entry = stateStore.get(KEY);

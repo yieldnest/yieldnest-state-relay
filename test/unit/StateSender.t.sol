@@ -3,7 +3,7 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "src/layerzero/LayerZeroStateRelayTransport.sol";
+import {LayerZeroSenderTransport} from "src/layerzero/LayerZeroSenderTransport.sol";
 import {StateSenderQuoteHarness} from "test/mocks/StateSenderQuoteHarness.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MockRateTarget} from "test/mocks/MockRateTarget.sol";
@@ -18,7 +18,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
     uint256 constant DST_CHAIN_ID = 42161;
 
     StateSender public stateSender;
-    LayerZeroStateRelayTransport public transport;
+    LayerZeroSenderTransport public transport;
     StateSenderQuoteHarness public quoteHarness;
     MessageSink public messageSink;
     MockRateTarget public mockTarget;
@@ -30,10 +30,10 @@ contract StateSenderTest is Test, TestHelperOz5 {
         mockTarget = new MockRateTarget();
         mockTarget.setRate(1e18);
 
-        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(address(endpoints[SRC_EID]));
-        bytes memory transportInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
+        LayerZeroSenderTransport transportImpl = new LayerZeroSenderTransport(address(endpoints[SRC_EID]));
+        bytes memory transportInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
         ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInitData);
-        transport = LayerZeroStateRelayTransport(address(transportProxy));
+        transport = LayerZeroSenderTransport(address(transportProxy));
 
         StateSender impl = new StateSender();
         bytes memory initData = abi.encodeCall(
@@ -50,7 +50,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         stateSender = StateSender(address(proxy));
 
         StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
-        bytes memory quoteInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
+        bytes memory quoteInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
         ERC1967Proxy quoteProxy = new ERC1967Proxy(address(quoteImpl), quoteInitData);
         quoteHarness = StateSenderQuoteHarness(address(quoteProxy));
 

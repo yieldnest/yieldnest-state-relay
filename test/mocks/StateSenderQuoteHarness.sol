@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {LayerZeroStateRelayTransport} from "src/layerzero/LayerZeroStateRelayTransport.sol";
+import {LayerZeroSenderTransport} from "src/layerzero/LayerZeroSenderTransport.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 
-contract StateSenderQuoteHarness is LayerZeroStateRelayTransport {
+contract StateSenderQuoteHarness is LayerZeroSenderTransport {
     MessagingFee internal _mockFee;
 
-    constructor(address _endpoint) LayerZeroStateRelayTransport(_endpoint) {}
+    constructor(address _endpoint) LayerZeroSenderTransport(_endpoint) {}
 
     function setMockFee(uint256 nativeFee, uint256 lzTokenFee) external {
         _mockFee = MessagingFee({nativeFee: nativeFee, lzTokenFee: lzTokenFee});

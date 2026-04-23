@@ -6,7 +6,7 @@ import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfac
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
 import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
 
-contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
+contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
     struct DestinationConfig {
         uint32 lzEid;
         bytes32 peer;
@@ -19,10 +19,10 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
     event DestinationSet(uint256 indexed destinationId, uint32 lzEid, bytes32 peer, bytes options, bool enabled);
     event MessageSent(uint256 indexed destinationId, uint32 lzEid, bytes message, address refundTo);
 
-    error LayerZeroStateRelayTransport_InvalidOwner();
-    error LayerZeroStateRelayTransport_DestinationNotEnabled(uint256 destinationId);
-    error LayerZeroStateRelayTransport_InsufficientNativeFee();
-    error LayerZeroStateRelayTransport_LzTokenPaymentNotSupported();
+    error LayerZeroSenderTransport_InvalidOwner();
+    error LayerZeroSenderTransport_DestinationNotEnabled(uint256 destinationId);
+    error LayerZeroSenderTransport_InsufficientNativeFee();
+    error LayerZeroSenderTransport_LzTokenPaymentNotSupported();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -30,7 +30,7 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
     }
 
     function initialize(address _owner) external initializer {
-        if (_owner == address(0)) revert LayerZeroStateRelayTransport_InvalidOwner();
+        if (_owner == address(0)) revert LayerZeroSenderTransport_InvalidOwner();
         __Ownable_init(_owner);
         __OApp_init(_owner);
     }
@@ -63,8 +63,8 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
     function send(uint256 destinationId, bytes calldata message, address refundTo) external payable {
         DestinationConfig storage destination = _getDestinationOrRevert(destinationId);
         MessagingFee memory fee = _quote(destination.lzEid, message, destination.options, false);
-        if (fee.lzTokenFee != 0) revert LayerZeroStateRelayTransport_LzTokenPaymentNotSupported();
-        if (msg.value < fee.nativeFee) revert LayerZeroStateRelayTransport_InsufficientNativeFee();
+        if (fee.lzTokenFee != 0) revert LayerZeroSenderTransport_LzTokenPaymentNotSupported();
+        if (msg.value < fee.nativeFee) revert LayerZeroSenderTransport_InsufficientNativeFee();
 
         _lzSend(destination.lzEid, message, destination.options, fee, refundTo);
         emit MessageSent(destinationId, destination.lzEid, message, refundTo);
@@ -72,7 +72,7 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
 
     function _getDestinationOrRevert(uint256 destinationId) internal view returns (DestinationConfig storage destination) {
         destination = destinations[destinationId];
-        if (!destination.enabled) revert LayerZeroStateRelayTransport_DestinationNotEnabled(destinationId);
+        if (!destination.enabled) revert LayerZeroSenderTransport_DestinationNotEnabled(destinationId);
     }
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {

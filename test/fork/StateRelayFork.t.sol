@@ -3,8 +3,8 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "src/layerzero/LayerZeroStateRelayTransport.sol";
-import {StateReceiver} from "src/StateReceiver.sol";
+import {LayerZeroSenderTransport} from "src/layerzero/LayerZeroSenderTransport.sol";
+import {LayerZeroReceiverTransport} from "src/layerzero/LayerZeroReceiverTransport.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
 import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
@@ -36,7 +36,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     uint256 internal constant DST_CHAIN_ID = 42161;
 
     StateSender internal stateSender;
-    LayerZeroStateRelayTransport internal transport;
+    LayerZeroSenderTransport internal transport;
     MessageSink internal messageSink;
 
     /// @dev ynETHx vault on the forked chain (mainnet only in this base).
@@ -48,10 +48,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         TestHelperOz5.setUp();
         setUpEndpoints(2, LibraryType.UltraLightNode);
 
-        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(address(endpoints[SRC_EID]));
-        bytes memory transportInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
+        LayerZeroSenderTransport transportImpl = new LayerZeroSenderTransport(address(endpoints[SRC_EID]));
+        bytes memory transportInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
         ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInitData);
-        transport = LayerZeroStateRelayTransport(address(transportProxy));
+        transport = LayerZeroSenderTransport(address(transportProxy));
 
         StateSender impl = new StateSender();
         bytes memory initData = abi.encodeCall(
@@ -174,7 +174,8 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
             stateStore = StateStore(address(storeProxy));
 
             StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
-            bytes memory recvInit = abi.encodeCall(StateReceiver.initialize, (address(this), address(stateStore)));
+            bytes memory recvInit =
+                abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
             ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
             receiver = StateReceiverHarness(address(recvProxy));
         }
