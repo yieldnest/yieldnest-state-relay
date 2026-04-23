@@ -51,13 +51,10 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
      * @param options LayerZero executor options used for sends to the destination.
      * @param enabled Whether the destination is currently enabled.
      */
-    function setDestination(
-        uint256 destinationId,
-        uint32 lzEid,
-        bytes32 peer,
-        bytes calldata options,
-        bool enabled
-    ) external onlyOwner {
+    function setDestination(uint256 destinationId, uint32 lzEid, bytes32 peer, bytes calldata options, bool enabled)
+        external
+        onlyOwner
+    {
         destinations[destinationId] = DestinationConfig({lzEid: lzEid, peer: peer, options: options, enabled: enabled});
         setPeer(lzEid, peer);
         emit DestinationSet(destinationId, lzEid, peer, options, enabled);
@@ -97,7 +94,11 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
      * @param destinationId Application-level destination identifier.
      * @return destination Enabled destination configuration for the requested route.
      */
-    function _getDestinationOrRevert(uint256 destinationId) internal view returns (DestinationConfig storage destination) {
+    function _getDestinationOrRevert(uint256 destinationId)
+        internal
+        view
+        returns (DestinationConfig storage destination)
+    {
         destination = destinations[destinationId];
         if (!destination.enabled) revert LayerZeroSenderTransport_DestinationNotEnabled(destinationId);
     }

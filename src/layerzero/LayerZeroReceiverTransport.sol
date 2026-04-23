@@ -18,6 +18,7 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
     error LayerZeroReceiverTransport_InvalidOwner();
     error LayerZeroReceiverTransport_InvalidStateStore();
     /// @custom:oz-upgrades-unsafe-allow constructor
+
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
         _disableInitializers();
     }

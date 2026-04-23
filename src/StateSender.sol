@@ -28,6 +28,7 @@ contract StateSender is AccessControlUpgradeable {
     event TargetSet(address previousTarget, address newTarget);
     event CallDataSet(bytes previousCallData, bytes newCallData);
     event VersionSet(uint256 previousVersion, uint256 newVersion);
+
     error StateSender_InsufficientNativeFee();
     error StateSender_NonNativeFeeUnsupported();
     error StateSender_StaticcallFailed();
@@ -102,9 +103,12 @@ contract StateSender is AccessControlUpgradeable {
     function quoteSendState(uint256 destinationId) public view returns (SendStateQuote memory quoteData) {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
+
         bytes memory message = _createMessage(key, stateData);
+
         IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
         if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
+
         return SendStateQuote({transportQuote: quote, key: key, message: message});
     }
 

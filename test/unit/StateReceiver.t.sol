@@ -50,9 +50,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         bytes memory value = abi.encode(uint256(1e18));
         bytes memory message = abi.encode(uint256(99), KEY, value, ts);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint256(99))
-        );
+        vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint256(99)));
         receiver.receivePayload(message);
 
         StateStore.Entry memory entry = stateStore.get(KEY);

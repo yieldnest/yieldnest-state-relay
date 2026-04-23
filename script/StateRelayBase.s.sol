@@ -122,7 +122,11 @@ contract StateRelayBase is BaseData {
             require(isSupportedChainId(sChain), "StateRelay: sender chainId not in BaseData");
             senderLabels.push(label);
             senderByLabel[label] = SenderInput({
-                chainId: sChain, target: target, callData: callData, refundAddress: refund, protocolVersion: pVer
+                chainId: sChain,
+                target: target,
+                callData: callData,
+                refundAddress: refund,
+                protocolVersion: pVer
             });
             _pushUniqueChainId(sChain);
         }

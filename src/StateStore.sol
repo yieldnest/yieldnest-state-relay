@@ -44,6 +44,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     error StateStore_NotWriter();
     error StateStore_UnsupportedVersion(uint256 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
+
     constructor() {
         _disableInitializers();
     }

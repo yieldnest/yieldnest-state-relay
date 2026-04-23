@@ -137,7 +137,9 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         _configureDelegate(recv);
     }
 
-    function _configurePeersReceiver(IOAppCore oapp, uint256[] memory remoteChainIds, bytes32[] memory peers) internal {
+    function _configurePeersReceiver(IOAppCore oapp, uint256[] memory remoteChainIds, bytes32[] memory peers)
+        internal
+    {
         require(remoteChainIds.length == peers.length, "StateRelay: peer array length");
         console.log("Configuring StateReceiver peers...");
         for (uint256 i; i < remoteChainIds.length; i++) {
@@ -158,9 +160,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         LayerZeroSenderTransport transport,
         uint256[] memory dstChainIds,
         bytes32 receiverPeer
-    )
-        internal
-    {
+    ) internal {
         console.log("Configuring StateSender peer -> receiver...");
         for (uint256 i; i < dstChainIds.length; i++) {
             uint256 destinationId = dstChainIds[i];
@@ -255,7 +255,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
 
             if (
                 keccak256(lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, dstEid, CONFIG_TYPE_ULN))
-                        == keccak256(abi.encode(ulnConfig))
+                    == keccak256(abi.encode(ulnConfig))
                     && keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, dstEid, CONFIG_TYPE_ULN))
                         == keccak256(abi.encode(ulnConfig))
             ) {
