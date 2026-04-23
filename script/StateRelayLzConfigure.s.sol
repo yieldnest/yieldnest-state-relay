@@ -6,7 +6,7 @@ import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "./StateRelayBase.s.sol";
 import {StateSender} from "../src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "../src/LayerZeroStateRelayTransport.sol";
+import {LayerZeroStateRelayTransport} from "../src/layerzero/LayerZeroStateRelayTransport.sol";
 
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";

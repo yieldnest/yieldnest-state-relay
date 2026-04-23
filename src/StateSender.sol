@@ -3,7 +3,7 @@ pragma solidity ^0.8.22;
 
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
-import {IRelayTransport} from "./IRelayTransport.sol";
+import {IRelayTransport} from "./interfaces/IRelayTransport.sol";
 
 /**
  * @title StateSender

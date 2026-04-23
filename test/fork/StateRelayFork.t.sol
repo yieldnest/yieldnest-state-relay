@@ -3,13 +3,13 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "src/LayerZeroStateRelayTransport.sol";
+import {LayerZeroStateRelayTransport} from "src/layerzero/LayerZeroStateRelayTransport.sol";
 import {StateReceiver} from "src/StateReceiver.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
 import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
 import {StateStore} from "src/StateStore.sol";
-import {RateAdapter} from "src/RateAdapter.sol";
+import {RateAdapter} from "src/adapter/RateAdapter.sol";
 import {StateReaderBase} from "src/StateReaderBase.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

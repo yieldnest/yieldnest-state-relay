@@ -9,7 +9,7 @@ import {BaseData} from "./BaseData.s.sol";
 import {StateStore} from "../src/StateStore.sol";
 import {StateSender} from "../src/StateSender.sol";
 import {StateReceiver} from "../src/StateReceiver.sol";
-import {LayerZeroStateRelayTransport} from "../src/LayerZeroStateRelayTransport.sol";
+import {LayerZeroStateRelayTransport} from "../src/layerzero/LayerZeroStateRelayTransport.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";

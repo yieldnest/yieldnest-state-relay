@@ -3,7 +3,7 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
-import {LayerZeroStateRelayTransport} from "src/LayerZeroStateRelayTransport.sol";
+import {LayerZeroStateRelayTransport} from "src/layerzero/LayerZeroStateRelayTransport.sol";
 import {StateSenderQuoteHarness} from "test/mocks/StateSenderQuoteHarness.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MockRateTarget} from "test/mocks/MockRateTarget.sol";

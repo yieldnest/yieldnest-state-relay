@@ -2,7 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
-import {RateAdapter} from "src/RateAdapter.sol";
+import {RateAdapter} from "src/adapter/RateAdapter.sol";
 import {StateReaderBase} from "src/StateReaderBase.sol";
 import {StateStore} from "src/StateStore.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
