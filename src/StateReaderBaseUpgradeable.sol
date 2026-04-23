@@ -48,6 +48,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
         uint256 _maxDstStaleness
     ) internal onlyInitializing {
         if (_stateStore == address(0)) revert StateReaderBaseUpgradeable_ZeroAddress();
+
         stateStore = StateStore(_stateStore);
         stateKey = _stateKey;
         maxSrcStaleness = _maxSrcStaleness;
@@ -61,6 +62,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
     function _getValue() internal view returns (bytes memory) {
         StateStore.Entry memory entry = stateStore.get(stateKey);
         _assertStaleness(entry.srcTimestamp, entry.updatedAt);
+
         return entry.value;
     }
 

@@ -96,6 +96,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint256, bytes32, bytes, uint64));
         StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
+
         return _write(key, update);
     }
 
@@ -122,7 +123,9 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     function _write(bytes32 key, StateUpdate memory update) internal returns (WriteResult memory result) {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         if (!supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
+
         Entry storage e = _entries[key];
+
         if (update.srcTimestamp <= e.srcTimestamp) {
             emit StateIgnored(key, update.version, update.srcTimestamp, e.srcTimestamp);
             return WriteResult({
@@ -133,11 +136,14 @@ contract StateStore is Initializable, AccessControlUpgradeable {
                 srcTimestamp: update.srcTimestamp
             });
         }
+
         e.value = update.value;
         e.version = update.version;
         e.srcTimestamp = update.srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
+
         emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
+
         return WriteResult({
             written: true,
             key: key,
