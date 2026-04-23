@@ -91,7 +91,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @param message Encoded relay payload containing version, key, value, and source timestamp.
      * @return result Structured write result including whether storage changed.
      */
-    function write(bytes calldata message) external returns (WriteResult memory result) {
+    function write(bytes calldata message) external onlyRole(WRITER_ROLE) returns (WriteResult memory result) {
         (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint256, bytes32, bytes, uint64));
         StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
@@ -104,7 +104,11 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @param update Decoded state update payload.
      * @return result Structured write result including whether storage changed.
      */
-    function write(bytes32 key, StateUpdate calldata update) external returns (WriteResult memory result) {
+    function write(bytes32 key, StateUpdate calldata update)
+        external
+        onlyRole(WRITER_ROLE)
+        returns (WriteResult memory result)
+    {
         return _write(key, update);
     }
 
