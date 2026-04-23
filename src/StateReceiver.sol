@@ -23,7 +23,7 @@ contract StateReceiver is OAppUpgradeable {
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {}
 
-    function initialize(address _owner, address _stateStore) external reinitializer(1) {
+    function initialize(address _owner, address _stateStore) external initializer {
         if (_owner == address(0)) revert StateReceiver_InvalidOwner();
         if (_stateStore == address(0)) revert StateReceiver_InvalidStateStore();
         __Ownable_init(_owner);

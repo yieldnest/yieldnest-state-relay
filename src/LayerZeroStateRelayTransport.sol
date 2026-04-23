@@ -29,7 +29,7 @@ contract LayerZeroStateRelayTransport is OAppUpgradeable, IRelayTransport {
         _disableInitializers();
     }
 
-    function initialize(address _owner) external reinitializer(1) {
+    function initialize(address _owner) external initializer {
         if (_owner == address(0)) revert LayerZeroStateRelayTransport_InvalidOwner();
         __Ownable_init(_owner);
         __OApp_init(_owner);

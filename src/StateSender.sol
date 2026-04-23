@@ -33,7 +33,7 @@ contract StateSender is AccessControlUpgradeable {
 
     function initialize(address _owner, address _transport, address _target, bytes memory _callData, uint8 _version)
         external
-        reinitializer(1)
+        initializer
     {
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
