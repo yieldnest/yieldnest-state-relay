@@ -127,6 +127,10 @@ contract StateSender is AccessControlUpgradeable {
         return _getStaticCallData();
     }
 
+    /**
+     * @notice Performs the configured `staticcall` against the source contract.
+     * @return Encoded return data from the source contract.
+     */
     function _getStaticCallData() internal view returns (bytes memory) {
         (bool success, bytes memory data) = target.staticcall(callData);
 
@@ -135,10 +139,20 @@ contract StateSender is AccessControlUpgradeable {
         return data;
     }
 
+    /**
+     * @notice Encodes the canonical relay payload.
+     * @param key Deterministic relay key for the source read.
+     * @param stateData Raw state bytes returned from the source contract.
+     * @return Encoded relay payload including version, key, value, and source timestamp.
+     */
     function _createMessage(bytes32 key, bytes memory stateData) internal view returns (bytes memory) {
         return abi.encode(version, key, stateData, uint64(block.timestamp));
     }
 
+    /**
+     * @notice Updates the stored transport adapter reference.
+     * @param _transport Address of the new transport adapter.
+     */
     function _setTransport(address _transport) internal {
         if (_transport == address(0)) revert StateSender_InvalidTransport();
         emit TransportSet(address(transport), _transport);

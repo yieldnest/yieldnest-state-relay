@@ -8,6 +8,13 @@ import {StateReaderBase} from "../StateReaderBase.sol";
  * @notice Reads the relayed rate from StateStore; decodes the uint256 value encoded by StateSender (staticcall return).
  */
 contract RateAdapter is StateReaderBase {
+    /**
+     * @notice Configures the adapter to read a specific relayed rate key with freshness bounds.
+     * @param _stateStore State store contract providing relayed values.
+     * @param _rateKey Relay key for the rate entry.
+     * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
+     * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
+     */
     constructor(address _stateStore, bytes32 _rateKey, uint256 _maxSrcStaleness, uint256 _maxDstStaleness)
         StateReaderBase(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness)
     {}

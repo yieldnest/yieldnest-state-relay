@@ -108,6 +108,12 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return _write(key, update);
     }
 
+    /**
+     * @notice Applies a decoded state update after writer and version checks.
+     * @param key Deterministic relay key for the value being updated.
+     * @param update Decoded state update payload.
+     * @return result Structured write result including whether storage changed.
+     */
     function _write(bytes32 key, StateUpdate memory update) internal returns (WriteResult memory result) {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         if (!supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);

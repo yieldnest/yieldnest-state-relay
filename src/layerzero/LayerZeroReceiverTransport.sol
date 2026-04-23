@@ -35,6 +35,10 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         stateStore = StateStore(_stateStore);
     }
 
+    /**
+     * @notice Handles an inbound LayerZero payload by forwarding it to the state store.
+     * @param _message Raw relay payload delivered by LayerZero.
+     */
     function _lzReceive(Origin calldata, bytes32, bytes calldata _message, address, bytes calldata)
         internal
         virtual

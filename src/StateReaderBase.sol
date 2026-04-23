@@ -19,6 +19,13 @@ abstract contract StateReaderBase {
     error StateReaderBase_DeliveryTimestampInFuture();
     error StateReaderBase_DeliveryStale();
 
+    /**
+     * @notice Configures the store, relay key, and staleness thresholds for a reader.
+     * @param _stateStore State store contract providing relayed values.
+     * @param _stateKey Relay key to read from the store.
+     * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
+     * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
+     */
     constructor(address _stateStore, bytes32 _stateKey, uint256 _maxSrcStaleness, uint256 _maxDstStaleness) {
         if (_stateStore == address(0)) revert StateReaderBase_ZeroAddress();
         stateStore = StateStore(_stateStore);
@@ -27,13 +34,21 @@ abstract contract StateReaderBase {
         maxDstStaleness = _maxDstStaleness;
     }
 
-    /// @dev Returns raw value after staleness checks. Subclasses use this and decode to their type.
+    /**
+     * @notice Returns the raw stored value after staleness checks pass.
+     * @return Raw bytes stored under the configured relay key.
+     */
     function _getValue() internal view returns (bytes memory) {
         StateStore.Entry memory entry = stateStore.get(stateKey);
         _assertStaleness(entry.srcTimestamp, entry.updatedAt);
         return entry.value;
     }
 
+    /**
+     * @notice Validates the source and delivery timestamps against the configured freshness windows.
+     * @param srcTimestamp Timestamp captured on the source chain.
+     * @param updatedAt Timestamp when the value was written on the destination chain.
+     */
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
         if (block.timestamp < srcTimestamp) revert StateReaderBase_SourceTimestampInFuture();
         if (block.timestamp - srcTimestamp > maxSrcStaleness) revert StateReaderBase_SourceStale();

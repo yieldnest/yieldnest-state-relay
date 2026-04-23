@@ -6,6 +6,10 @@ import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfac
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
 import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
 
+/**
+ * @title LayerZeroSenderTransport
+ * @notice LayerZero-specific send adapter that maps application destination IDs onto LayerZero route configuration.
+ */
 contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
     struct DestinationConfig {
         uint32 lzEid;
@@ -88,11 +92,19 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
         emit MessageSent(destinationId, destination.lzEid, message, refundTo);
     }
 
+    /**
+     * @notice Resolves and validates the destination configuration for a send.
+     * @param destinationId Application-level destination identifier.
+     * @return destination Enabled destination configuration for the requested route.
+     */
     function _getDestinationOrRevert(uint256 destinationId) internal view returns (DestinationConfig storage destination) {
         destination = destinations[destinationId];
         if (!destination.enabled) revert LayerZeroSenderTransport_DestinationNotEnabled(destinationId);
     }
 
+    /**
+     * @notice Rejects inbound LayerZero deliveries because this transport is send-only.
+     */
     function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {
         // Send-only transport adapter.
     }
