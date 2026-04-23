@@ -11,15 +11,12 @@ import {StateStore} from "../StateStore.sol";
  */
 contract LayerZeroReceiverTransport is OAppUpgradeable {
     StateStore public stateStore;
-    mapping(uint8 => bool) public supportedVersions;
 
-    event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
     event MessageReceived(uint8 version, bytes32 key, bytes value, uint64 srcTimestamp);
     event StaleMessageIgnored(uint8 version, bytes32 key, uint64 srcTimestamp);
 
     error LayerZeroReceiverTransport_InvalidOwner();
     error LayerZeroReceiverTransport_InvalidStateStore();
-    error LayerZeroReceiverTransport_UnsupportedVersion(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
         _disableInitializers();
@@ -31,21 +28,6 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         __Ownable_init(_owner);
         __OApp_init(_owner);
         stateStore = StateStore(_stateStore);
-
-        supportedVersions[1] = true;
-    }
-
-    function setSupportedVersion(uint8 version, bool supported) external onlyOwner {
-        emit SupportedVersionSet(version, supportedVersions[version], supported);
-        supportedVersions[version] = supported;
-    }
-
-    function _decodePayload(bytes calldata message)
-        internal
-        pure
-        returns (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp)
-    {
-        (version, key, value, srcTimestamp) = abi.decode(message, (uint8, bytes32, bytes, uint64));
     }
 
     function _lzReceive(Origin calldata, bytes32, bytes calldata _message, address, bytes calldata)
@@ -53,17 +35,11 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         virtual
         override
     {
-        (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) = _decodePayload(_message);
-
-        // Revert on unsupported versions so LayerZero retains the message for retry after upgrade.
-        if (!supportedVersions[version]) revert LayerZeroReceiverTransport_UnsupportedVersion(version);
-
-        StateStore.WriteResult memory result =
-            stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
+        StateStore.WriteResult memory result = stateStore.write(_message);
         if (result.written) {
-            emit MessageReceived(version, key, value, srcTimestamp);
+            emit MessageReceived(result.version, result.key, result.value, result.srcTimestamp);
         } else {
-            emit StaleMessageIgnored(version, key, srcTimestamp);
+            emit StaleMessageIgnored(result.version, result.key, result.srcTimestamp);
         }
     }
 }

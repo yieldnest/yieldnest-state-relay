@@ -24,17 +24,24 @@ contract StateStore is Initializable, AccessControlUpgradeable {
 
     struct WriteResult {
         bool written;
+        bytes32 key;
+        bytes value;
+        uint8 version;
+        uint64 srcTimestamp;
     }
 
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
+    mapping(uint8 => bool) public supportedVersions;
 
+    event SupportedVersionSet(uint8 version, bool previousSupported, bool newSupported);
     event StateUpdated(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 updatedAt);
     event StateIgnored(bytes32 indexed key, uint8 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
 
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
+    error StateStore_UnsupportedVersion(uint8 version);
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
@@ -49,25 +56,56 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         for (uint256 i = 0; i < writers_.length; i++) {
             _grantRole(WRITER_ROLE, writers_[i]);
         }
+
+        supportedVersions[1] = true;
     }
 
     function isWriter(address account) public view returns (bool) {
         return hasRole(WRITER_ROLE, account);
     }
 
+    function setSupportedVersion(uint8 version, bool supported) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        emit SupportedVersionSet(version, supportedVersions[version], supported);
+        supportedVersions[version] = supported;
+    }
+
+    function write(bytes calldata message) external returns (WriteResult memory result) {
+        (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
+            abi.decode(message, (uint8, bytes32, bytes, uint64));
+        StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
+        return _write(key, update);
+    }
+
     function write(bytes32 key, StateUpdate calldata update) external returns (WriteResult memory result) {
+        return _write(key, update);
+    }
+
+    function _write(bytes32 key, StateUpdate memory update) internal returns (WriteResult memory result) {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
+        if (!supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
         Entry storage e = _entries[key];
         if (update.srcTimestamp <= e.srcTimestamp) {
             emit StateIgnored(key, update.version, update.srcTimestamp, e.srcTimestamp);
-            return WriteResult({written: false});
+            return WriteResult({
+                written: false,
+                key: key,
+                value: update.value,
+                version: update.version,
+                srcTimestamp: update.srcTimestamp
+            });
         }
         e.value = update.value;
         e.version = update.version;
         e.srcTimestamp = update.srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
         emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
-        return WriteResult({written: true});
+        return WriteResult({
+            written: true,
+            key: key,
+            value: update.value,
+            version: update.version,
+            srcTimestamp: update.srcTimestamp
+        });
     }
 
     function get(bytes32 key) external view returns (Entry memory) {

@@ -11,17 +11,13 @@ import {StateStore} from "src/StateStore.sol";
 contract StateReceiverHarness is LayerZeroReceiverTransport {
     constructor(address _endpoint) LayerZeroReceiverTransport(_endpoint) {}
 
-    /// @dev Mirrors _lzReceive: decode, revert on unsupported version, write, emit events.
+    /// @dev Mirrors _lzReceive: forward raw payload to the store and emit based on the write result.
     function receivePayload(bytes calldata message) external {
-        (uint8 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
-            abi.decode(message, (uint8, bytes32, bytes, uint64));
-        if (!supportedVersions[version]) revert LayerZeroReceiverTransport_UnsupportedVersion(version);
-        StateStore.WriteResult memory result =
-            stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
+        StateStore.WriteResult memory result = stateStore.write(message);
         if (result.written) {
-            emit MessageReceived(version, key, value, srcTimestamp);
+            emit MessageReceived(result.version, result.key, result.value, result.srcTimestamp);
         } else {
-            emit StaleMessageIgnored(version, key, srcTimestamp);
+            emit StaleMessageIgnored(result.version, result.key, result.srcTimestamp);
         }
     }
 }

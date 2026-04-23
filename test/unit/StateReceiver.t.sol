@@ -51,9 +51,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         bytes memory message = abi.encode(uint8(99), KEY, value, ts);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LayerZeroReceiverTransport.LayerZeroReceiverTransport_UnsupportedVersion.selector, uint8(99)
-            )
+            abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint8(99))
         );
         receiver.receivePayload(message);
 
@@ -64,7 +62,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
     }
 
     function test_receivePayload_setSupportedVersion_thenReceives() public {
-        receiver.setSupportedVersion(2, true);
+        stateStore.setSupportedVersion(2, true);
 
         uint64 ts = uint64(block.timestamp);
         bytes memory value = abi.encode(uint256(2e18));

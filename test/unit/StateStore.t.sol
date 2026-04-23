@@ -52,4 +52,9 @@ contract StateStoreTest is Test {
         StateStore.Entry memory entry = stateStore.get(KEY);
         assertEq(abi.decode(entry.value, (uint256)), 2e18);
     }
+
+    function test_write_unsupportedVersion_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint8(2)));
+        stateStore.write(KEY, StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 2, srcTimestamp: 1}));
+    }
 }
