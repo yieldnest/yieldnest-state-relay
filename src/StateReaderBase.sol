@@ -8,6 +8,8 @@ import {StateStore} from "./StateStore.sol";
  * @notice Abstract reader: fetches bytes from StateStore by key and asserts staleness. Subclasses decode/validate.
  */
 abstract contract StateReaderBase {
+    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
+
     StateStore public stateStore;
     bytes32 public stateKey;
     uint256 public maxSrcStaleness;
@@ -50,8 +52,9 @@ abstract contract StateReaderBase {
      * @param updatedAt Timestamp when the value was written on the destination chain.
      */
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
-        if (block.timestamp < srcTimestamp) revert StateReaderBase_SourceTimestampInFuture();
-        if (block.timestamp - srcTimestamp > maxSrcStaleness) revert StateReaderBase_SourceStale();
+        if (srcTimestamp > block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW) revert StateReaderBase_SourceTimestampInFuture();
+        uint256 srcAge = srcTimestamp > block.timestamp ? 0 : block.timestamp - srcTimestamp;
+        if (srcAge > maxSrcStaleness) revert StateReaderBase_SourceStale();
         if (block.timestamp < updatedAt) revert StateReaderBase_DeliveryTimestampInFuture();
         if (block.timestamp - updatedAt > maxDstStaleness) revert StateReaderBase_DeliveryStale();
     }

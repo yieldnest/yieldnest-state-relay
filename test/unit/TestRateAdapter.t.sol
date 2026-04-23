@@ -9,6 +9,7 @@ import {KeyDerivation} from "src/KeyDerivation.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 contract TestRateAdapterTest is Test {
+    uint256 constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
     StateStore public stateStore;
     RateAdapter public rateAdapter;
     bytes32 public rateKey;
@@ -81,6 +82,31 @@ contract TestRateAdapterTest is Test {
         );
         vm.warp(block.timestamp + STALENESS - 1);
         assertEq(rateAdapter.getRate(), 1e18);
+    }
+
+    function test_getRate_sourceTimestampWithinSkew_succeeds() public {
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({
+                value: abi.encode(1e18),
+                version: 1,
+                srcTimestamp: uint64(block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW)
+            })
+        );
+        assertEq(rateAdapter.getRate(), 1e18);
+    }
+
+    function test_getRate_sourceTimestampBeyondSkew_reverts() public {
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({
+                value: abi.encode(1e18),
+                version: 1,
+                srcTimestamp: uint64(block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW + 1)
+            })
+        );
+        vm.expectRevert(StateReaderBase.StateReaderBase_SourceTimestampInFuture.selector);
+        rateAdapter.getRate();
     }
 
     // --- StateReaderBase: config stored correctly ---
