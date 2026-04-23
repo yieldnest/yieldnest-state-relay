@@ -30,6 +30,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         uint64 srcTimestamp;
     }
 
+    bytes32 public constant VERSION_MANAGER_ROLE = keccak256("VERSION_MANAGER_ROLE");
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
@@ -51,6 +52,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         __AccessControl_init();
         if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
+        _grantRole(VERSION_MANAGER_ROLE, owner_);
         _grantRole(WRITER_MANAGER_ROLE, owner_);
         _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);
         for (uint256 i = 0; i < writers_.length; i++) {
@@ -64,7 +66,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function setSupportedVersion(uint256 version, bool supported) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSupportedVersion(uint256 version, bool supported) external onlyRole(VERSION_MANAGER_ROLE) {
         emit SupportedVersionSet(version, supportedVersions[version], supported);
         supportedVersions[version] = supported;
     }
