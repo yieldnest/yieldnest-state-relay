@@ -9,6 +9,8 @@ import {BaseData} from "./BaseData.s.sol";
 import {StateStore} from "../src/StateStore.sol";
 import {StateSender} from "../src/StateSender.sol";
 import {StateReceiver} from "../src/StateReceiver.sol";
+import {LayerZeroStateRelayTransport} from "../src/LayerZeroStateRelayTransport.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
@@ -37,6 +39,10 @@ contract StateRelayBase is BaseData {
     mapping(uint256 => address) internal stateStoreOf;
     mapping(uint256 => address) internal stateReceiverOf;
     mapping(bytes32 => address) internal stateSenderOf;
+
+    function defaultSendOptions() internal pure returns (bytes memory) {
+        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
+    }
 
     function senderSlot(uint256 chainId, string memory label) internal pure returns (bytes32) {
         return keccak256(abi.encodePacked(chainId, bytes(label)));
@@ -250,16 +256,25 @@ contract StateRelayBase is BaseData {
         }
 
         _startBroadcast();
-        StateSender impl = new StateSender(lzEndpoint);
+        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(lzEndpoint);
+        bytes memory transportInit = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (relayOwner));
+        ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInit);
+
+        StateSender impl = new StateSender();
         bytes memory init = abi.encodeCall(
-            StateSender.initialize, (relayOwner, s.target, s.refundAddress, s.callData, s.protocolVersion)
+            StateSender.initialize, (relayOwner, address(transportProxy), s.target, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
+        LayerZeroStateRelayTransport(address(transportProxy)).setDestination(
+            receiverChainId, getEID(receiverChainId), bytes32(0), defaultSendOptions(), true
+        );
         vm.stopBroadcast();
 
         stateSenderOf[slot] = address(proxy);
         console.log("StateSender [%s] proxy:", label);
         console.logAddress(address(proxy));
+        console.log("StateSender [%s] transport:", label);
+        console.logAddress(address(transportProxy));
     }
 
     /// @dev Merges into the deployment file on disk: call `loadDeployment()` first so in-memory maps include prior

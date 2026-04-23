@@ -5,6 +5,8 @@ pragma solidity ^0.8.22;
 import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "../StateRelayBase.s.sol";
+import {StateSender} from "../../src/StateSender.sol";
+import {LayerZeroStateRelayTransport} from "../../src/LayerZeroStateRelayTransport.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
@@ -52,12 +54,24 @@ contract TransferStateRelayOwnership is StateRelayBase {
             if (senderByLabel[label].chainId != cid) continue;
             address snd = stateSenderOf[senderSlot(cid, label)];
             if (snd == address(0)) continue;
-            Ownable o = Ownable(snd);
-            if (o.owner() != nextOwner) {
-                if (o.owner() != relayOwner) revert NotOwner();
+
+            StateSender sender = StateSender(snd);
+            if (!sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)) {
+                vm.startBroadcast(pk);
+                sender.grantRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner);
+                sender.grantRole(sender.CONFIG_MANAGER_ROLE(), nextOwner);
+                sender.revokeRole(sender.CONFIG_MANAGER_ROLE(), relayOwner);
+                sender.revokeRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner);
+                vm.stopBroadcast();
+                console.log("StateSender [%s] roles -> OFT_OWNER", label);
+            }
+
+            LayerZeroStateRelayTransport transport = LayerZeroStateRelayTransport(address(sender.transport()));
+            if (transport.owner() != nextOwner) {
+                if (transport.owner() != relayOwner) revert NotOwner();
                 vm.broadcast(pk);
-                o.transferOwnership(nextOwner);
-                console.log("StateSender [%s] ownership -> OFT_OWNER", label);
+                transport.transferOwnership(nextOwner);
+                console.log("StateSender transport [%s] ownership -> OFT_OWNER", label);
             }
         }
     }

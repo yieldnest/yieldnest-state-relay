@@ -5,6 +5,8 @@ pragma solidity ^0.8.22;
 import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "./StateRelayBase.s.sol";
+import {StateSender} from "../src/StateSender.sol";
+import {LayerZeroStateRelayTransport} from "../src/LayerZeroStateRelayTransport.sol";
 
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
@@ -16,8 +18,8 @@ interface ILZEndpointDelegates {
     function delegates(address) external view returns (address);
 }
 
-/// @notice LayerZero endpoint wiring for StateSender / StateReceiver (peers, libs, DVN, executor, delegate). Mirrors `BaseScript` OFT configure flow.
-/// @dev StateSender/Receiver do not use OApp Type-3 enforced options; gas is fixed in `StateSender._getDefaultOptions`. At most one `senders` entry per source chain for a given receiver (one peer per source EID on the receiver).
+/// @notice LayerZero endpoint wiring for relay transports / StateReceiver (peers, libs, DVN, executor, delegate).
+/// @dev Each sender has a transport contract that is the actual LayerZero OApp peer for the receiver.
 abstract contract StateRelayLzConfigure is StateRelayBase {
     uint32 internal constant CONFIG_TYPE_EXECUTOR = 1;
     uint32 internal constant CONFIG_TYPE_ULN = 2;
@@ -25,6 +27,10 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
 
     function addressToBytes32(address _addr) internal pure returns (bytes32) {
         return bytes32(uint256(uint160(_addr)));
+    }
+
+    function _senderTransport(address senderAddr) internal view returns (address) {
+        return address(StateSender(senderAddr).transport());
     }
 
     function _requireAtMostOneSenderPerSourceChain() internal view {
@@ -63,7 +69,7 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             address snd = stateSenderOf[senderSlot(srcChain, label)];
             require(snd != address(0), "StateRelay: configure receiver: sender not deployed");
             remoteChainIds[k] = srcChain;
-            peerForRemote[k] = addressToBytes32(snd);
+            peerForRemote[k] = addressToBytes32(_senderTransport(snd));
             k++;
         }
     }
@@ -95,13 +101,14 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             address senderAddr = stateSenderOf[senderSlot(cid, label)];
             if (senderAddr == address(0)) continue;
 
-            IOAppCore sOapp = IOAppCore(senderAddr);
-            _configurePeersSenderToReceiver(sOapp, dstOnlyReceiver, recvB32);
-            _configureSendLibs(senderAddr, dstOnlyReceiver);
-            _configureReceiveLibs(senderAddr, dstOnlyReceiver);
-            _configureDVNs(senderAddr, dstOnlyReceiver);
-            _configureExecutor(senderAddr, dstOnlyReceiver);
-            _configureDelegate(senderAddr);
+            address transportAddr = _senderTransport(senderAddr);
+            LayerZeroStateRelayTransport transport = LayerZeroStateRelayTransport(transportAddr);
+            _configurePeersSenderToReceiver(transport, dstOnlyReceiver, recvB32);
+            _configureSendLibs(transportAddr, dstOnlyReceiver);
+            _configureReceiveLibs(transportAddr, dstOnlyReceiver);
+            _configureDVNs(transportAddr, dstOnlyReceiver);
+            _configureExecutor(transportAddr, dstOnlyReceiver);
+            _configureDelegate(transportAddr);
         }
     }
 
@@ -147,18 +154,25 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         }
     }
 
-    function _configurePeersSenderToReceiver(IOAppCore oapp, uint256[] memory dstChainIds, bytes32 receiverPeer)
+    function _configurePeersSenderToReceiver(
+        LayerZeroStateRelayTransport transport,
+        uint256[] memory dstChainIds,
+        bytes32 receiverPeer
+    )
         internal
     {
         console.log("Configuring StateSender peer -> receiver...");
         for (uint256 i; i < dstChainIds.length; i++) {
-            uint32 dstEid = getEID(dstChainIds[i]);
-            if (oapp.peers(dstEid) == receiverPeer) {
+            uint256 destinationId = dstChainIds[i];
+            uint32 dstEid = getEID(destinationId);
+            (uint32 configuredEid, bytes32 configuredPeer, bytes memory options, bool enabled) =
+                transport.destinations(destinationId);
+            if (transport.peers(dstEid) == receiverPeer && configuredPeer == receiverPeer) {
                 console.log("Sender peer already set dst chainId", dstChainIds[i]);
                 continue;
             }
             _startBroadcast();
-            oapp.setPeer(dstEid, receiverPeer);
+            transport.setDestination(destinationId, configuredEid, receiverPeer, options, enabled);
             vm.stopBroadcast();
             console.log("Sender set peer dst chainId", dstChainIds[i]);
         }

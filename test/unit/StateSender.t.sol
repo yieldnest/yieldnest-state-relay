@@ -3,19 +3,22 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
+import {LayerZeroStateRelayTransport} from "src/LayerZeroStateRelayTransport.sol";
 import {StateSenderQuoteHarness} from "test/mocks/StateSenderQuoteHarness.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MockRateTarget} from "test/mocks/MockRateTarget.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
-import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 contract StateSenderTest is Test, TestHelperOz5 {
     uint32 constant SRC_EID = 1;
     uint32 constant DST_EID = 2;
+    uint256 constant DST_CHAIN_ID = 42161;
 
     StateSender public stateSender;
+    LayerZeroStateRelayTransport public transport;
     StateSenderQuoteHarness public quoteHarness;
     MessageSink public messageSink;
     MockRateTarget public mockTarget;
@@ -27,14 +30,18 @@ contract StateSenderTest is Test, TestHelperOz5 {
         mockTarget = new MockRateTarget();
         mockTarget.setRate(1e18);
 
-        // StateSender is upgradeable: deploy impl + proxy, initialize via proxy
-        StateSender impl = new StateSender(address(endpoints[SRC_EID]));
+        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(address(endpoints[SRC_EID]));
+        bytes memory transportInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
+        ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInitData);
+        transport = LayerZeroStateRelayTransport(address(transportProxy));
+
+        StateSender impl = new StateSender();
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
             (
                 address(this),
+                address(transport),
                 address(mockTarget),
-                address(this),
                 abi.encodeWithSelector(MockRateTarget.getRate.selector),
                 1
             )
@@ -43,16 +50,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         stateSender = StateSender(address(proxy));
 
         StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
-        bytes memory quoteInitData = abi.encodeCall(
-            StateSender.initialize,
-            (
-                address(this),
-                address(mockTarget),
-                address(this),
-                abi.encodeWithSelector(MockRateTarget.getRate.selector),
-                1
-            )
-        );
+        bytes memory quoteInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
         ERC1967Proxy quoteProxy = new ERC1967Proxy(address(quoteImpl), quoteInitData);
         quoteHarness = StateSenderQuoteHarness(address(quoteProxy));
 
@@ -61,7 +59,23 @@ contract StateSenderTest is Test, TestHelperOz5 {
             _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
         messageSink = MessageSink(sinkAddr);
 
-        wireOApps(toAddressArray(address(proxy), sinkAddr));
+        wireOApps(toAddressArray(address(transportProxy), sinkAddr));
+
+        transport.setDestination(
+            DST_CHAIN_ID,
+            DST_EID,
+            addressToBytes32(address(messageSink)),
+            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            true
+        );
+
+        quoteHarness.setDestination(
+            DST_CHAIN_ID,
+            DST_EID,
+            addressToBytes32(address(messageSink)),
+            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            true
+        );
     }
 
     function toAddressArray(address a, address b) internal pure returns (address[] memory arr) {
@@ -71,11 +85,10 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_sendState_native_packetDelivered() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
-        assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
-        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
+        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
+        assertTrue(fee > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee.nativeFee}(DST_EID);
+        stateSender.sendState{value: fee}(DST_CHAIN_ID);
 
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
@@ -95,43 +108,49 @@ contract StateSenderTest is Test, TestHelperOz5 {
     }
 
     function test_sendState_insufficientNativeFee_reverts() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
-        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
+        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
-        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
+        stateSender.sendState{value: fee - 1}(DST_CHAIN_ID);
     }
 
     function test_staticcallFailure_reverts() public {
         // Use a contract that reverts on getRate() so staticcall fails (0xdead has no code and returns success)
-        StateSender badImpl = new StateSender(address(endpoints[SRC_EID]));
+        StateSender badImpl = new StateSender();
         bytes memory initData = abi.encodeCall(
             StateSender.initialize,
-            (address(this), address(badImpl), address(this), abi.encodeWithSelector(MockRateTarget.getRate.selector), 1)
+            (
+                address(this),
+                address(transport),
+                address(badImpl),
+                abi.encodeWithSelector(MockRateTarget.getRate.selector),
+                1
+            )
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
         StateSender badSender = StateSender(address(badProxy));
         vm.expectRevert(StateSender.StateSender_StaticcallFailed.selector);
-        badSender.quoteSendState(DST_EID);
+        badSender.quoteSendState(DST_CHAIN_ID);
     }
 
     function test_quoteSendState_lzTokenFee_reverts() public {
         quoteHarness.setMockFee(1, 1);
+        stateSender.setTransport(address(quoteHarness));
 
-        vm.expectRevert(StateSender.StateSender_LzTokenPaymentNotSupported.selector);
-        quoteHarness.quoteSendState(DST_EID);
+        vm.expectRevert(LayerZeroStateRelayTransport.LayerZeroStateRelayTransport_LzTokenPaymentNotSupported.selector);
+        stateSender.quoteSendState(DST_CHAIN_ID);
     }
 
     function test_sendState_lzTokenFee_reverts() public {
         quoteHarness.setMockFee(1, 1);
+        stateSender.setTransport(address(quoteHarness));
 
-        vm.expectRevert(StateSender.StateSender_LzTokenPaymentNotSupported.selector);
-        quoteHarness.sendState{value: 1}(DST_EID);
+        vm.expectRevert(LayerZeroStateRelayTransport.LayerZeroStateRelayTransport_LzTokenPaymentNotSupported.selector);
+        stateSender.sendState{value: 1}(DST_CHAIN_ID);
     }
 
     function test_deriveKey_matchesStoredKey() public {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
-        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
-        stateSender.sendState{value: fee.nativeFee}(DST_EID);
+        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
+        stateSender.sendState{value: fee}(DST_CHAIN_ID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         (, bytes32 key,,) = abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));

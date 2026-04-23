@@ -1,70 +1,56 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
-import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
-import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
-import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
+import {IRelayTransport} from "./IRelayTransport.sol";
 
 /**
  * @title StateSender
- * @notice Source-chain upgradeable OApp: reads state via staticcall, sends via _lzSend.
- * @dev Stub: key derivation and send logic to be implemented.
+ * @notice Source-chain relay app: reads state, builds canonical payload, forwards through a transport adapter.
  */
-contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
+contract StateSender is AccessControlUpgradeable {
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
 
+    IRelayTransport public transport;
     address public target;
-    address public refundAddress;
     bytes public callData;
     uint8 public version;
 
-    event StateSent(bytes32 key, uint32 dstEid, bytes message);
+    event StateSent(bytes32 key, uint256 destinationId, bytes message);
+    event TransportSet(address previousTransport, address newTransport);
     event TargetSet(address previousTarget, address newTarget);
-    event RefundAddressSet(address previousRefundAddress, address newRefundAddress);
     event CallDataSet(bytes previousCallData, bytes newCallData);
     event VersionSet(uint8 previousVersion, uint8 newVersion);
-    error StateSender_LzTokenPaymentNotSupported();
     error StateSender_InsufficientNativeFee();
     error StateSender_StaticcallFailed();
+    error StateSender_InvalidTransport();
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor(address _endpoint) OAppUpgradeable(_endpoint) {
+    constructor() {
         _disableInitializers();
     }
 
-    /**
-     * @notice Initialize the OApp and ownership.
-     * @param _owner Delegate and owner (capable of configuring peers, etc.)
-     * @param _target The target contract to send the state to
-     * @param _callData The function signature and data to make the staticcall state retrieval from the target contract
-     * @param _version The version of the state relay
-     */
-    function initialize(address _owner, address _target, address _refundAddress, bytes memory _callData, uint8 _version)
+    function initialize(address _owner, address _transport, address _target, bytes memory _callData, uint8 _version)
         external
         reinitializer(1)
     {
-        __Ownable_init(_owner);
-        __OApp_init(_owner);
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(CONFIG_MANAGER_ROLE, _owner);
+        _setTransport(_transport);
         target = _target;
-        refundAddress = _refundAddress;
         callData = _callData;
         version = _version;
+    }
+
+    function setTransport(address _transport) external onlyRole(CONFIG_MANAGER_ROLE) {
+        _setTransport(_transport);
     }
 
     function setTarget(address _target) external onlyRole(CONFIG_MANAGER_ROLE) {
         emit TargetSet(target, _target);
         target = _target;
-    }
-
-    function setRefundAddress(address _refundAddress) external onlyRole(CONFIG_MANAGER_ROLE) {
-        emit RefundAddressSet(refundAddress, _refundAddress);
-        refundAddress = _refundAddress;
     }
 
     function setCallData(bytes memory _callData) external onlyRole(CONFIG_MANAGER_ROLE) {
@@ -77,32 +63,21 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
         version = _version;
     }
 
-    /// @notice Returns the messaging fee for sending state to _dstEid (for callers to pass as msg.value when paying).
-    function quoteSendState(uint32 _dstEid) external view returns (MessagingFee memory fee) {
+    function quoteSendState(uint256 destinationId) external view returns (uint256 nativeFee) {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        fee = _quote(_dstEid, message, _getDefaultOptions(), false);
-        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
+        return transport.quoteSend(destinationId, message);
     }
 
-    function sendState(uint32 _dstEid) external payable {
+    function sendState(uint256 destinationId) external payable {
         bytes memory stateData = _getStaticCallData();
         bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
         bytes memory message = _createMessage(key, stateData);
-        bytes memory options = _getDefaultOptions();
-        MessagingFee memory fee = _quote(_dstEid, message, options, false);
-        if (fee.lzTokenFee != 0) revert StateSender_LzTokenPaymentNotSupported();
-
-        if (msg.value < fee.nativeFee) revert StateSender_InsufficientNativeFee();
-        _lzSend(_dstEid, message, options, fee, refundAddress);
-
-        emit StateSent(key, _dstEid, message);
-    }
-
-    /// @dev Options used for quote and send (executor lzReceive gas + value for destination).
-    function _getDefaultOptions() internal pure returns (bytes memory) {
-        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
+        uint256 nativeFee = transport.quoteSend(destinationId, message);
+        if (msg.value < nativeFee) revert StateSender_InsufficientNativeFee();
+        transport.send{value: msg.value}(destinationId, message, msg.sender);
+        emit StateSent(key, destinationId, message);
     }
 
     function getStaticCallData() public view returns (bytes memory) {
@@ -121,7 +96,9 @@ contract StateSender is OAppUpgradeable, AccessControlUpgradeable {
         return abi.encode(version, key, stateData, uint64(block.timestamp));
     }
 
-    function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata) internal virtual override {
-        // Send-only OApp: no receive logic.
+    function _setTransport(address _transport) internal {
+        if (_transport == address(0)) revert StateSender_InvalidTransport();
+        emit TransportSet(address(transport), _transport);
+        transport = IRelayTransport(_transport);
     }
 }

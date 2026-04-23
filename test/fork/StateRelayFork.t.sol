@@ -3,6 +3,7 @@ pragma solidity ^0.8.22;
 
 import {Test} from "forge-std/Test.sol";
 import {StateSender} from "src/StateSender.sol";
+import {LayerZeroStateRelayTransport} from "src/LayerZeroStateRelayTransport.sol";
 import {StateReceiver} from "src/StateReceiver.sol";
 import {KeyDerivation} from "src/KeyDerivation.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
@@ -11,9 +12,9 @@ import {StateStore} from "src/StateStore.sol";
 import {RateAdapter} from "src/RateAdapter.sol";
 import {StateReaderBase} from "src/StateReaderBase.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
-import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 /// @dev Canonical ynETHx on Ethereum L1 + shared calldata for `convertToAssets(1e18)`.
 abstract contract StateRelayForkConstants {
@@ -32,8 +33,10 @@ abstract contract StateRelayForkConstants {
 abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkConstants {
     uint32 internal constant SRC_EID = 1;
     uint32 internal constant DST_EID = 2;
+    uint256 internal constant DST_CHAIN_ID = 42161;
 
     StateSender internal stateSender;
+    LayerZeroStateRelayTransport internal transport;
     MessageSink internal messageSink;
 
     /// @dev ynETHx vault on the forked chain (mainnet only in this base).
@@ -45,9 +48,14 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         TestHelperOz5.setUp();
         setUpEndpoints(2, LibraryType.UltraLightNode);
 
-        StateSender impl = new StateSender(address(endpoints[SRC_EID]));
+        LayerZeroStateRelayTransport transportImpl = new LayerZeroStateRelayTransport(address(endpoints[SRC_EID]));
+        bytes memory transportInitData = abi.encodeCall(LayerZeroStateRelayTransport.initialize, (address(this)));
+        ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInitData);
+        transport = LayerZeroStateRelayTransport(address(transportProxy));
+
+        StateSender impl = new StateSender();
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize, (address(this), ynEthx_, address(this), CONVERT_TO_ASSETS_CALLDATA, 1)
+            StateSender.initialize, (address(this), address(transport), ynEthx_, CONVERT_TO_ASSETS_CALLDATA, 1)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
@@ -56,7 +64,14 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
             _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
         messageSink = MessageSink(sinkAddr);
 
-        wireOApps(toAddressArray(address(proxy), sinkAddr));
+        wireOApps(toAddressArray(address(transportProxy), sinkAddr));
+        transport.setDestination(
+            DST_CHAIN_ID,
+            DST_EID,
+            addressToBytes32(address(messageSink)),
+            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            true
+        );
     }
 
     function toAddressArray(address a, address b) internal pure returns (address[] memory arr) {
@@ -70,11 +85,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         require(ok, "fork: convertToAssets staticcall failed");
         uint256 expectedAssets = abi.decode(ret, (uint256));
 
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
-        assertTrue(fee.nativeFee > 0, "expected non-zero native fee");
-        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
+        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
+        assertTrue(fee > 0, "expected non-zero native fee");
 
-        stateSender.sendState{value: fee.nativeFee}(DST_EID);
+        stateSender.sendState{value: fee}(DST_CHAIN_ID);
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         assertEq(messageSink.lastMessage().length, 192, "message size");
@@ -91,10 +105,9 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     }
 
     function _assertInsufficientNativeFeeReverts() internal {
-        MessagingFee memory fee = stateSender.quoteSendState(DST_EID);
-        assertEq(fee.lzTokenFee, 0, "lz token fee must be disabled");
+        uint256 fee = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
-        stateSender.sendState{value: fee.nativeFee - 1}(DST_EID);
+        stateSender.sendState{value: fee - 1}(DST_CHAIN_ID);
     }
 }
 

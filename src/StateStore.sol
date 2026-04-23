@@ -22,6 +22,10 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         uint64 updatedAt;
     }
 
+    struct WriteResult {
+        bool written;
+    }
+
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
     mapping(bytes32 => Entry) private _entries;
@@ -51,19 +55,19 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         return hasRole(WRITER_ROLE, account);
     }
 
-    function write(bytes32 key, StateUpdate calldata update) external returns (bool written) {
+    function write(bytes32 key, StateUpdate calldata update) external returns (WriteResult memory result) {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         Entry storage e = _entries[key];
         if (update.srcTimestamp <= e.srcTimestamp) {
             emit StateIgnored(key, update.version, update.srcTimestamp, e.srcTimestamp);
-            return false;
+            return WriteResult({written: false});
         }
         e.value = update.value;
         e.version = update.version;
         e.srcTimestamp = update.srcTimestamp;
         e.updatedAt = uint64(block.timestamp);
         emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
-        return true;
+        return WriteResult({written: true});
     }
 
     function get(bytes32 key) external view returns (Entry memory) {

@@ -56,9 +56,9 @@ contract StateReceiver is OAppUpgradeable {
         // Revert on unsupported versions so LayerZero retains the message for retry after upgrade.
         if (!supportedVersions[version]) revert StateReceiver_UnsupportedVersion(version);
 
-        bool written =
+        StateStore.WriteResult memory result =
             stateStore.write(key, StateStore.StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp}));
-        if (written) {
+        if (result.written) {
             emit MessageReceived(version, key, value, srcTimestamp);
         } else {
             emit StaleMessageIgnored(version, key, srcTimestamp);
