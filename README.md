@@ -45,13 +45,13 @@ Run with the same `script/inputs/<relay>.json` as first argument; deployment add
 2. **`2_DeployStateRelayDestination`** — **StateStore** + **StateReceiver** on **`receiverChainId`** (`--rpc-url` = destination, **`--broadcast`**).
 3. **`3_ConfigureStateRelaySenders`** — LayerZero wiring for **StateSender(s)** (once per source chain RPC; needs receiver in deployment file; **`--broadcast`**).
 4. **`4_ConfigureStateRelayReceiver`** — LayerZero wiring for **StateReceiver** (destination RPC; **`--broadcast`**).
-5. **`5_TransferStateRelayOwnership`** (optional) — transfer `Ownable` to `BaseData` `OFT_OWNER` per chain (`--broadcast`).
+5. **`5_TransferStateRelayOwnership`** (optional) — transfer destination `StateStore` admin roles, destination receiver ownership, sender app roles, and sender transport ownership to `BaseData` `OFT_OWNER` per chain (`--broadcast`).
 
 ## Peer configuration
 
-- Source chain: set peer `(dstEid, StateReceiver proxy address)` on StateSender for each destination.
-- Destination chain: set peer `(srcEid, StateSender proxy address)` on StateReceiver.
-- StateStore: `setWriter(StateReceiver proxy, true)` so only LZ-delivered messages can write.
+- Source chain: set peer `(dstEid, receiver transport proxy address)` on the sender transport for each destination.
+- Destination chain: set peer `(srcEid, sender transport proxy address)` on the receiver transport.
+- StateStore: grant `WRITER_ROLE` to the receiver transport so only delivered messages can write.
 
 ## Forked Anvil (optional)
 
