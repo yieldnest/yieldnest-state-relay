@@ -98,7 +98,9 @@ contract TransferStateRelayOwnership is StateRelayBase {
         console.log("StateStore roles -> OFT_OWNER");
     }
 
-    function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner, uint256 pk) internal {
+    function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner, uint256 pk)
+        internal
+    {
         bool relayAdmin = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)
             || !sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner)

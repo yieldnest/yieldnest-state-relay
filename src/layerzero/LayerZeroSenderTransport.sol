@@ -141,11 +141,7 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
      *      This repo intentionally uses one raw namespace hash per contract storage blob.
      * @return $ LayerZeroSenderTransport storage blob.
      */
-    function _getLayerZeroSenderTransportStorage()
-        internal
-        pure
-        returns (LayerZeroSenderTransportStorage storage $)
-    {
+    function _getLayerZeroSenderTransportStorage() internal pure returns (LayerZeroSenderTransportStorage storage $) {
         assembly {
             $.slot := 0x573c202118fe57f459cce9fdf607f84c000b40f5a7fb4b74da5c7052f8c73606
         }

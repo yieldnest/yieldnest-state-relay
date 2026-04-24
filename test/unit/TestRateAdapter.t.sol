@@ -24,11 +24,10 @@ contract TestRateAdapterTest is Test {
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(this));
         rateKey = KeyDerivation.deriveKey(block.chainid, address(0x123), hex"679aefce");
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
-        bytes memory adapterInit =
-            abi.encodeCall(
-                RateAdapterUpgradeable.initialize,
-                (address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
-            );
+        bytes memory adapterInit = abi.encodeCall(
+            RateAdapterUpgradeable.initialize,
+            (address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+        );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         rateAdapter = RateAdapterUpgradeable(address(adapterProxy));
     }

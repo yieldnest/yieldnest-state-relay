@@ -22,10 +22,7 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
         uint256 _maxSrcStaleness,
         uint256 _maxDstStaleness,
         uint256 _maxSourceTimestampSkew
-    )
-        external
-        initializer
-    {
+    ) external initializer {
         __StateReaderBase_init(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness, _maxSourceTimestampSkew);
     }
 
