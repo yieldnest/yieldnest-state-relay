@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.22;
 
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {OAppUpgradeable} from "@layerzerolabs/oapp-evm-upgradeable/contracts/oapp/OAppUpgradeable.sol";
 import {MessagingFee} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppReceiver.sol";
@@ -10,7 +11,10 @@ import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
  * @title LayerZeroSenderTransport
  * @notice LayerZero-specific send adapter that maps application destination IDs onto LayerZero route configuration.
  */
-contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
+contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, IRelayTransport {
+    bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 public constant SENDER_ROLE = keccak256("SENDER_ROLE");
+
     struct DestinationConfig {
         uint32 lzEid;
         bytes32 peer;
@@ -42,26 +46,36 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
      */
     function initialize(address _owner) external initializer {
         if (_owner == address(0)) revert LayerZeroSenderTransport_InvalidOwner();
+        __AccessControl_init();
         __Ownable_init(_owner);
         __OApp_init(_owner);
+        _grantRole(DEFAULT_ADMIN_ROLE, _owner);
+        _grantRole(CONFIG_MANAGER_ROLE, _owner);
     }
 
     /**
-     * @notice Configures a destination route for LayerZero sends.
-     * @param destinationId Application-level destination identifier.
-     * @param lzEid LayerZero endpoint ID for the destination.
-     * @param peer Trusted peer address encoded as bytes32.
-     * @param options LayerZero executor options used for sends to the destination.
-     * @param enabled Whether the destination is currently enabled.
+     * @notice Configures destination routes for LayerZero sends.
+     * @param configs Destination route configurations to apply.
      */
-    function setDestination(uint256 destinationId, uint32 lzEid, bytes32 peer, bytes calldata options, bool enabled)
+    function setDestination(DestinationConfig[] calldata configs, uint256[] calldata destinationIds)
         external
-        onlyOwner
+        onlyRole(CONFIG_MANAGER_ROLE)
     {
-        _getLayerZeroSenderTransportStorage().destinations[destinationId] =
-            DestinationConfig({lzEid: lzEid, peer: peer, options: options, enabled: enabled});
-        setPeer(lzEid, peer);
-        emit DestinationSet(destinationId, lzEid, peer, options, enabled);
+        require(configs.length == destinationIds.length, "LayerZeroSenderTransport: array length mismatch");
+
+        LayerZeroSenderTransportStorage storage $ = _getLayerZeroSenderTransportStorage();
+        for (uint256 i = 0; i < configs.length; i++) {
+            DestinationConfig calldata config = configs[i];
+            uint256 destinationId = destinationIds[i];
+            $.destinations[destinationId] = DestinationConfig({
+                lzEid: config.lzEid,
+                peer: config.peer,
+                options: config.options,
+                enabled: config.enabled
+            });
+            setPeer(config.lzEid, config.peer);
+            emit DestinationSet(destinationId, config.lzEid, config.peer, config.options, config.enabled);
+        }
     }
 
     /**
@@ -83,7 +97,11 @@ contract LayerZeroSenderTransport is OAppUpgradeable, IRelayTransport {
     /**
      * @inheritdoc IRelayTransport
      */
-    function send(uint256 destinationId, bytes calldata message, address refundTo) external payable {
+    function send(uint256 destinationId, bytes calldata message, address refundTo)
+        external
+        payable
+        onlyRole(SENDER_ROLE)
+    {
         DestinationConfig storage destination = _getDestinationOrRevert(destinationId);
         MessagingFee memory fee = _quote(destination.lzEid, message, destination.options, false);
         if (fee.lzTokenFee != 0) revert LayerZeroSenderTransport_LzTokenPaymentNotSupported();

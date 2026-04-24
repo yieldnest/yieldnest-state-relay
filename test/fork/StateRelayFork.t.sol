@@ -60,19 +60,24 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
+        transport.grantRole(transport.SENDER_ROLE(), address(stateSender));
 
         address sinkAddr =
             _deployOApp(type(MessageSink).creationCode, abi.encode(address(endpoints[DST_EID]), address(this)));
         messageSink = MessageSink(sinkAddr);
 
         wireOApps(toAddressArray(address(transportProxy), sinkAddr));
-        transport.setDestination(
-            DST_CHAIN_ID,
-            DST_EID,
-            addressToBytes32(address(messageSink)),
-            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
-            true
-        );
+        LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
+            new LayerZeroSenderTransport.DestinationConfig[](1);
+        destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
+            lzEid: DST_EID,
+            peer: addressToBytes32(address(messageSink)),
+            options: OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            enabled: true
+        });
+        uint256[] memory destinationIds = new uint256[](1);
+        destinationIds[0] = DST_CHAIN_ID;
+        transport.setDestination(destinationConfigs, destinationIds);
     }
 
     function toAddressArray(address a, address b) internal pure returns (address[] memory arr) {

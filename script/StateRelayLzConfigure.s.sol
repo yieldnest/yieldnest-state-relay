@@ -103,6 +103,12 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
 
             address transportAddr = _senderTransport(senderAddr);
             LayerZeroSenderTransport transport = LayerZeroSenderTransport(transportAddr);
+            if (!transport.hasRole(transport.SENDER_ROLE(), senderAddr)) {
+                _startBroadcast();
+                transport.grantRole(transport.SENDER_ROLE(), senderAddr);
+                vm.stopBroadcast();
+                console.log("Sender transport granted SENDER_ROLE");
+            }
             _configurePeersSenderToReceiver(transport, dstOnlyReceiver, recvB32);
             _configureSendLibs(transportAddr, dstOnlyReceiver);
             _configureReceiveLibs(transportAddr, dstOnlyReceiver);
@@ -171,8 +177,18 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
                 console.log("Sender peer already set dst chainId", dstChainIds[i]);
                 continue;
             }
+            LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
+                new LayerZeroSenderTransport.DestinationConfig[](1);
+            destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
+                lzEid: configuredEid,
+                peer: receiverPeer,
+                options: options,
+                enabled: enabled
+            });
+            uint256[] memory destinationIds = new uint256[](1);
+            destinationIds[0] = destinationId;
             _startBroadcast();
-            transport.setDestination(destinationId, configuredEid, receiverPeer, options, enabled);
+            transport.setDestination(destinationConfigs, destinationIds);
             vm.stopBroadcast();
             console.log("Sender set peer dst chainId", dstChainIds[i]);
         }

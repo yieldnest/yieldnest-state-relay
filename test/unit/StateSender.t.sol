@@ -48,11 +48,13 @@ contract StateSenderTest is Test, TestHelperOz5 {
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
+        transport.grantRole(transport.SENDER_ROLE(), address(stateSender));
 
         StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
         bytes memory quoteInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
         ERC1967Proxy quoteProxy = new ERC1967Proxy(address(quoteImpl), quoteInitData);
         quoteHarness = StateSenderQuoteHarness(address(quoteProxy));
+        quoteHarness.grantRole(quoteHarness.SENDER_ROLE(), address(stateSender));
 
         // MessageSink: (endpoint, delegate)
         address sinkAddr =
@@ -61,21 +63,19 @@ contract StateSenderTest is Test, TestHelperOz5 {
 
         wireOApps(toAddressArray(address(transportProxy), sinkAddr));
 
-        transport.setDestination(
-            DST_CHAIN_ID,
-            DST_EID,
-            addressToBytes32(address(messageSink)),
-            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
-            true
-        );
+        LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
+            new LayerZeroSenderTransport.DestinationConfig[](1);
+        destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
+            lzEid: DST_EID,
+            peer: addressToBytes32(address(messageSink)),
+            options: OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            enabled: true
+        });
+        uint256[] memory destinationIds = new uint256[](1);
+        destinationIds[0] = DST_CHAIN_ID;
 
-        quoteHarness.setDestination(
-            DST_CHAIN_ID,
-            DST_EID,
-            addressToBytes32(address(messageSink)),
-            OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
-            true
-        );
+        transport.setDestination(destinationConfigs, destinationIds);
+        quoteHarness.setDestination(destinationConfigs, destinationIds);
     }
 
     function toAddressArray(address a, address b) internal pure returns (address[] memory arr) {
@@ -130,6 +130,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         );
         ERC1967Proxy badProxy = new ERC1967Proxy(address(badImpl), initData);
         StateSender badSender = StateSender(address(badProxy));
+        transport.grantRole(transport.SENDER_ROLE(), address(badSender));
         vm.expectRevert(StateSender.StateSender_StaticcallFailed.selector);
         badSender.quoteSendState(DST_CHAIN_ID);
     }

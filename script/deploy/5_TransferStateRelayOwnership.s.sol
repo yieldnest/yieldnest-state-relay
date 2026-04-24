@@ -53,6 +53,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
             _transferStateSenderRoles(StateSender(snd), label, nextOwner, pk);
 
             LayerZeroSenderTransport transport = LayerZeroSenderTransport(address(StateSender(snd).transport()));
+            _transferStateSenderTransportRoles(transport, label, nextOwner, pk);
             if (transport.owner() != nextOwner) {
                 if (transport.owner() != relayOwner) revert NotOwner();
                 vm.broadcast(pk);
@@ -134,5 +135,40 @@ contract TransferStateRelayOwnership is StateRelayBase {
         vm.stopBroadcast();
 
         console.log("StateSender [%s] roles -> OFT_OWNER", label);
+    }
+
+    function _transferStateSenderTransportRoles(
+        LayerZeroSenderTransport transport,
+        string memory label,
+        address nextOwner,
+        uint256 pk
+    )
+        internal
+    {
+        bool relayAdmin = transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner);
+        bool needsGrant = !transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner)
+            || !transport.hasRole(transport.CONFIG_MANAGER_ROLE(), nextOwner);
+        bool needsRenounce = transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner)
+            || transport.hasRole(transport.CONFIG_MANAGER_ROLE(), relayOwner);
+
+        if (!needsGrant && !needsRenounce) return;
+        if (needsGrant && !relayAdmin) revert NotOwner();
+
+        vm.startBroadcast(pk);
+        if (!transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner)) {
+            transport.grantRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner);
+        }
+        if (!transport.hasRole(transport.CONFIG_MANAGER_ROLE(), nextOwner)) {
+            transport.grantRole(transport.CONFIG_MANAGER_ROLE(), nextOwner);
+        }
+        if (transport.hasRole(transport.CONFIG_MANAGER_ROLE(), relayOwner)) {
+            transport.renounceRole(transport.CONFIG_MANAGER_ROLE(), relayOwner);
+        }
+        if (transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner)) {
+            transport.renounceRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner);
+        }
+        vm.stopBroadcast();
+
+        console.log("StateSender transport [%s] roles -> OFT_OWNER", label);
     }
 }
