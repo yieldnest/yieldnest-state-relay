@@ -14,12 +14,19 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @param _rateKey Relay key for the rate entry.
      * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
      * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
+     * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
      */
-    function initialize(address _stateStore, bytes32 _rateKey, uint256 _maxSrcStaleness, uint256 _maxDstStaleness)
+    function initialize(
+        address _stateStore,
+        bytes32 _rateKey,
+        uint256 _maxSrcStaleness,
+        uint256 _maxDstStaleness,
+        uint256 _maxSourceTimestampSkew
+    )
         external
         initializer
     {
-        __StateReaderBase_init(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness);
+        __StateReaderBase_init(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness, _maxSourceTimestampSkew);
     }
 
     /**

@@ -34,6 +34,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
     uint32 internal constant SRC_EID = 1;
     uint32 internal constant DST_EID = 2;
     uint256 internal constant DST_CHAIN_ID = 42161;
+    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
 
     StateSender internal stateSender;
     LayerZeroSenderTransport internal transport;
@@ -80,13 +81,21 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         arr[1] = b;
     }
 
-    function _deployRateAdapter(address stateStore_, bytes32 key, uint256 maxSrcStaleness, uint256 maxDstStaleness)
+    function _deployRateAdapter(
+        address stateStore_,
+        bytes32 key,
+        uint256 maxSrcStaleness,
+        uint256 maxDstStaleness,
+        uint256 maxSourceTimestampSkew
+    )
         internal
         returns (RateAdapterUpgradeable)
     {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
-        bytes memory adapterInit =
-            abi.encodeCall(RateAdapterUpgradeable.initialize, (stateStore_, key, maxSrcStaleness, maxDstStaleness));
+        bytes memory adapterInit = abi.encodeCall(
+            RateAdapterUpgradeable.initialize,
+            (stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew)
+        );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         return RateAdapterUpgradeable(address(adapterProxy));
     }
@@ -206,7 +215,8 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnet_convertToAssets_writtenOnArbitrumStateStore() public {
         (StateStore stateStore, bytes32 key, uint256 expectedRate,) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapterUpgradeable adapter = _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        RateAdapterUpgradeable adapter =
+            _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW);
         assertEq(adapter.getRate(), expectedRate);
     }
 
@@ -214,9 +224,11 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     function test_fork_mainnetToArbitrum_rateAdapter_passesShortStaleness() public {
         (StateStore stateStore, bytes32 key, uint256 expectedRate,) = _readMainnetAndDeliverToArbitrum();
 
-        RateAdapterUpgradeable adapter = _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS);
+        RateAdapterUpgradeable adapter =
+            _deployRateAdapter(address(stateStore), key, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW);
         assertEq(adapter.maxSrcStaleness(), STALENESS);
         assertEq(adapter.maxDstStaleness(), STALENESS);
+        assertEq(adapter.maxSourceTimestampSkew(), MAX_SOURCE_TIMESTAMP_SKEW);
         assertEq(adapter.getRate(), expectedRate);
 
         // Still within both windows after a modest warp (delivery age < STALENESS).
@@ -229,8 +241,9 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         (StateStore stateStore, bytes32 key,, uint256 deliveredAt) = _readMainnetAndDeliverToArbitrum();
 
         // Keep source window wider so this test isolates delivery-stale behavior.
-        RateAdapterUpgradeable adapter =
-            _deployRateAdapter(address(stateStore), key, STALENESS + 1 hours, STALENESS);
+        RateAdapterUpgradeable adapter = _deployRateAdapter(
+            address(stateStore), key, STALENESS + 1 hours, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW
+        );
 
         vm.warp(deliveredAt + STALENESS + 1);
         vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_DeliveryStale.selector);

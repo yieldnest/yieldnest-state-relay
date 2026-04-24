@@ -25,7 +25,10 @@ contract TestRateAdapterTest is Test {
         rateKey = KeyDerivation.deriveKey(block.chainid, address(0x123), hex"679aefce");
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit =
-            abi.encodeCall(RateAdapterUpgradeable.initialize, (address(stateStore), rateKey, STALENESS, STALENESS));
+            abi.encodeCall(
+                RateAdapterUpgradeable.initialize,
+                (address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+            );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         rateAdapter = RateAdapterUpgradeable(address(adapterProxy));
     }
@@ -120,6 +123,7 @@ contract TestRateAdapterTest is Test {
         assertEq(rateAdapter.rateKey(), rateKey);
         assertEq(rateAdapter.maxSrcStaleness(), STALENESS);
         assertEq(rateAdapter.maxDstStaleness(), STALENESS);
+        assertEq(rateAdapter.maxSourceTimestampSkew(), MAX_SOURCE_TIMESTAMP_SKEW);
     }
 
     function test_getRate_noEntry_reverts() public {

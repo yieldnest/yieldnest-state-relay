@@ -9,12 +9,11 @@ import {StateStore} from "./StateStore.sol";
  * @notice Abstract reader: fetches bytes from StateStore by key and asserts staleness. Subclasses decode/validate.
  */
 abstract contract StateReaderBaseUpgradeable is Initializable {
-    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
-
     StateStore public stateStore;
     bytes32 public stateKey;
     uint256 public maxSrcStaleness;
     uint256 public maxDstStaleness;
+    uint256 public maxSourceTimestampSkew;
 
     error StateReaderBaseUpgradeable_ZeroAddress();
     error StateReaderBaseUpgradeable_SourceTimestampInFuture();
@@ -40,12 +39,14 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
      * @param _stateKey Relay key to read from the store.
      * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
      * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
+     * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
      */
     function __StateReaderBase_init(
         address _stateStore,
         bytes32 _stateKey,
         uint256 _maxSrcStaleness,
-        uint256 _maxDstStaleness
+        uint256 _maxDstStaleness,
+        uint256 _maxSourceTimestampSkew
     ) internal onlyInitializing {
         if (_stateStore == address(0)) revert StateReaderBaseUpgradeable_ZeroAddress();
 
@@ -53,6 +54,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
         stateKey = _stateKey;
         maxSrcStaleness = _maxSrcStaleness;
         maxDstStaleness = _maxDstStaleness;
+        maxSourceTimestampSkew = _maxSourceTimestampSkew;
     }
 
     /**
@@ -72,7 +74,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
      * @param updatedAt Timestamp when the value was written on the destination chain.
      */
     function _assertStaleness(uint64 srcTimestamp, uint64 updatedAt) internal view {
-        if (srcTimestamp > block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW) {
+        if (srcTimestamp > block.timestamp + maxSourceTimestampSkew) {
             revert StateReaderBaseUpgradeable_SourceTimestampInFuture();
         }
         uint256 srcAge = srcTimestamp > block.timestamp ? 0 : block.timestamp - srcTimestamp;
