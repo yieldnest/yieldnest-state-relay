@@ -30,12 +30,15 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         uint64 srcTimestamp;
     }
 
+    /// @custom:storage-location erc7201:yieldnest.storage.state_store
+    struct StateStoreStorage {
+        mapping(bytes32 key => Entry entry) entries;
+        mapping(uint256 version => bool supported) supportedVersions;
+    }
+
     bytes32 public constant VERSION_MANAGER_ROLE = keccak256("VERSION_MANAGER_ROLE");
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
-    mapping(bytes32 => Entry) private _entries;
-    mapping(uint256 => bool) public supportedVersions;
-
     event SupportedVersionSet(uint256 version, bool previousSupported, bool newSupported);
     event StateUpdated(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt);
     event StateIgnored(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
@@ -43,6 +46,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
     error StateStore_UnsupportedVersion(uint256 version);
+
     /// @custom:oz-upgrades-unsafe-allow constructor
 
     constructor() {
@@ -55,6 +59,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @param writers_ Addresses granted the writer role at initialization.
      */
     function initialize(address owner_, address[] memory writers_) external initializer {
+        StateStoreStorage storage $ = _getStateStoreStorage();
         __AccessControl_init();
         if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
@@ -65,7 +70,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
             _grantRole(WRITER_ROLE, writers_[i]);
         }
 
-        supportedVersions[1] = true;
+        $.supportedVersions[1] = true;
     }
 
     /**
@@ -83,8 +88,9 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @param supported Whether the version should be accepted.
      */
     function setSupportedVersion(uint256 version, bool supported) external onlyRole(VERSION_MANAGER_ROLE) {
-        emit SupportedVersionSet(version, supportedVersions[version], supported);
-        supportedVersions[version] = supported;
+        StateStoreStorage storage $ = _getStateStoreStorage();
+        emit SupportedVersionSet(version, $.supportedVersions[version], supported);
+        $.supportedVersions[version] = supported;
     }
 
     /**
@@ -121,10 +127,11 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @return result Structured write result including whether storage changed.
      */
     function _write(bytes32 key, StateUpdate memory update) internal returns (WriteResult memory result) {
+        StateStoreStorage storage $ = _getStateStoreStorage();
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
-        if (!supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
+        if (!$.supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
 
-        Entry storage latestEntry = _entries[key];
+        Entry storage latestEntry = $.entries[key];
 
         if (update.srcTimestamp <= latestEntry.srcTimestamp) {
             emit StateIgnored(key, update.version, update.srcTimestamp, latestEntry.srcTimestamp);
@@ -153,12 +160,37 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         });
     }
 
+    // --- Getters ---
+
+    /**
+     * @notice Returns whether a relay message version is supported.
+     * @param version Version value to query.
+     * @return True if the version is currently accepted.
+     */
+    function supportedVersions(uint256 version) public view returns (bool) {
+        return _getStateStoreStorage().supportedVersions[version];
+    }
+
     /**
      * @notice Returns the stored entry for a relay key.
      * @param key Deterministic relay key to read.
      * @return Stored entry for `key`.
      */
     function get(bytes32 key) external view returns (Entry memory) {
-        return _entries[key];
+        return _getStateStoreStorage().entries[key];
+    }
+
+    /**
+     * @notice Returns the namespaced storage blob for StateStore.
+     * @dev Storage slot derivation:
+     *      1. `namespace = keccak256("yieldnest.storage.state_store")`
+     *      2. `slot = 0x5224f9d9226b43d24c2ffcb41b9e4bca8fa471c2e64183e81dab7b258857cb32`
+     *      This repo intentionally uses one raw namespace hash per contract storage blob.
+     * @return $ StateStore storage blob.
+     */
+    function _getStateStoreStorage() internal pure returns (StateStoreStorage storage $) {
+        assembly {
+            $.slot := 0x5224f9d9226b43d24c2ffcb41b9e4bca8fa471c2e64183e81dab7b258857cb32
+        }
     }
 }

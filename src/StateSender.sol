@@ -19,10 +19,13 @@ contract StateSender is AccessControlUpgradeable {
         bytes message;
     }
 
-    IRelayTransport public transport;
-    address public target;
-    bytes public callData;
-    uint256 public version;
+    /// @custom:storage-location erc7201:yieldnest.storage.state_sender
+    struct StateSenderStorage {
+        IRelayTransport transport;
+        address target;
+        bytes callData;
+        uint256 version;
+    }
 
     event StateSent(bytes32 key, uint256 destinationId, bytes message);
     event TransportSet(address previousTransport, address newTransport);
@@ -52,14 +55,15 @@ contract StateSender is AccessControlUpgradeable {
         external
         initializer
     {
+        StateSenderStorage storage $ = _getStateSenderStorage();
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(CONFIG_MANAGER_ROLE, _owner);
         _grantRole(TRANSPORT_MANAGER_ROLE, _owner);
         _setTransport(_transport);
-        target = _target;
-        callData = _callData;
-        version = _version;
+        $.target = _target;
+        $.callData = _callData;
+        $.version = _version;
     }
 
     /**
@@ -75,8 +79,9 @@ contract StateSender is AccessControlUpgradeable {
      * @param _target Address of the new read target.
      */
     function setTarget(address _target) external onlyRole(CONFIG_MANAGER_ROLE) {
-        emit TargetSet(target, _target);
-        target = _target;
+        StateSenderStorage storage $ = _getStateSenderStorage();
+        emit TargetSet($.target, _target);
+        $.target = _target;
     }
 
     /**
@@ -84,8 +89,9 @@ contract StateSender is AccessControlUpgradeable {
      * @param _callData New calldata payload for the source-chain `staticcall`.
      */
     function setCallData(bytes memory _callData) external onlyRole(CONFIG_MANAGER_ROLE) {
-        emit CallDataSet(callData, _callData);
-        callData = _callData;
+        StateSenderStorage storage $ = _getStateSenderStorage();
+        emit CallDataSet($.callData, _callData);
+        $.callData = _callData;
     }
 
     /**
@@ -93,8 +99,9 @@ contract StateSender is AccessControlUpgradeable {
      * @param _version New message version value.
      */
     function setVersion(uint256 _version) external onlyRole(CONFIG_MANAGER_ROLE) {
-        emit VersionSet(version, _version);
-        version = _version;
+        StateSenderStorage storage $ = _getStateSenderStorage();
+        emit VersionSet($.version, _version);
+        $.version = _version;
     }
 
     /**
@@ -103,12 +110,13 @@ contract StateSender is AccessControlUpgradeable {
      * @return quoteData Transport quote, derived key, and encoded message for the send.
      */
     function quoteSendState(uint256 destinationId) public view returns (SendStateQuote memory quoteData) {
+        StateSenderStorage storage $ = _getStateSenderStorage();
         bytes memory stateData = _getStaticCallData();
-        bytes32 key = KeyDerivation.deriveKey(block.chainid, target, callData);
+        bytes32 key = KeyDerivation.deriveKey(block.chainid, $.target, $.callData);
 
         bytes memory message = _createMessage(key, stateData);
 
-        IRelayTransport.TransportQuote memory quote = transport.quoteSend(destinationId, message);
+        IRelayTransport.TransportQuote memory quote = $.transport.quoteSend(destinationId, message);
         if (!quote.nativeFee) revert StateSender_NonNativeFeeUnsupported();
 
         return SendStateQuote({transportQuote: quote, key: key, message: message});
@@ -121,7 +129,7 @@ contract StateSender is AccessControlUpgradeable {
     function sendState(uint256 destinationId) external payable {
         SendStateQuote memory quoteData = quoteSendState(destinationId);
         if (msg.value < quoteData.transportQuote.feeAmount) revert StateSender_InsufficientNativeFee();
-        transport.send{value: msg.value}(destinationId, quoteData.message, msg.sender);
+        _getStateSenderStorage().transport.send{value: msg.value}(destinationId, quoteData.message, msg.sender);
         emit StateSent(quoteData.key, destinationId, quoteData.message);
     }
 
@@ -138,7 +146,8 @@ contract StateSender is AccessControlUpgradeable {
      * @return Encoded return data from the source contract.
      */
     function _getStaticCallData() internal view returns (bytes memory) {
-        (bool success, bytes memory data) = target.staticcall(callData);
+        StateSenderStorage storage $ = _getStateSenderStorage();
+        (bool success, bytes memory data) = $.target.staticcall($.callData);
 
         if (!success) revert StateSender_StaticcallFailed();
 
@@ -152,7 +161,7 @@ contract StateSender is AccessControlUpgradeable {
      * @return Encoded relay payload including version, key, value, and source timestamp.
      */
     function _createMessage(bytes32 key, bytes memory stateData) internal view returns (bytes memory) {
-        return abi.encode(version, key, stateData, uint64(block.timestamp));
+        return abi.encode(_getStateSenderStorage().version, key, stateData, uint64(block.timestamp));
     }
 
     /**
@@ -160,8 +169,57 @@ contract StateSender is AccessControlUpgradeable {
      * @param _transport Address of the new transport adapter.
      */
     function _setTransport(address _transport) internal {
+        StateSenderStorage storage $ = _getStateSenderStorage();
         if (_transport == address(0)) revert StateSender_InvalidTransport();
-        emit TransportSet(address(transport), _transport);
-        transport = IRelayTransport(_transport);
+        emit TransportSet(address($.transport), _transport);
+        $.transport = IRelayTransport(_transport);
+    }
+
+    // --- Getters ---
+
+    /**
+     * @notice Returns the configured transport adapter.
+     * @return Configured transport adapter.
+     */
+    function transport() public view returns (IRelayTransport) {
+        return _getStateSenderStorage().transport;
+    }
+
+    /**
+     * @notice Returns the configured source read target.
+     * @return Configured source read target.
+     */
+    function target() public view returns (address) {
+        return _getStateSenderStorage().target;
+    }
+
+    /**
+     * @notice Returns the configured source read calldata.
+     * @return Configured source read calldata.
+     */
+    function callData() public view returns (bytes memory) {
+        return _getStateSenderStorage().callData;
+    }
+
+    /**
+     * @notice Returns the configured outbound relay version.
+     * @return Configured outbound relay version.
+     */
+    function version() public view returns (uint256) {
+        return _getStateSenderStorage().version;
+    }
+
+    /**
+     * @notice Returns the namespaced storage blob for StateSender.
+     * @dev Storage slot derivation:
+     *      1. `namespace = keccak256("yieldnest.storage.state_sender")`
+     *      2. `slot = 0xd2cf4d03df6a2cd4e2e16141189509923da0c783c15418b31ba778070d4b90e5`
+     *      This repo intentionally uses one raw namespace hash per contract storage blob.
+     * @return $ StateSender storage blob.
+     */
+    function _getStateSenderStorage() internal pure returns (StateSenderStorage storage $) {
+        assembly {
+            $.slot := 0xd2cf4d03df6a2cd4e2e16141189509923da0c783c15418b31ba778070d4b90e5
+        }
     }
 }

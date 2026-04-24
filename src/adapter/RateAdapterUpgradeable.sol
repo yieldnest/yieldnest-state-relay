@@ -42,6 +42,6 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @return Relay key read from the state store.
      */
     function rateKey() external view returns (bytes32) {
-        return stateKey;
+        return stateKey();
     }
 }

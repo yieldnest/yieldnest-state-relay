@@ -10,13 +10,17 @@ import {StateStore} from "../StateStore.sol";
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).
  */
 contract LayerZeroReceiverTransport is OAppUpgradeable {
-    StateStore public stateStore;
+    /// @custom:storage-location erc7201:yieldnest.storage.lz_receiver_transport
+    struct LayerZeroReceiverTransportStorage {
+        StateStore stateStore;
+    }
 
     event MessageReceived(uint256 version, bytes32 key, bytes value, uint64 srcTimestamp);
     event StaleMessageIgnored(uint256 version, bytes32 key, uint64 srcTimestamp);
 
     error LayerZeroReceiverTransport_InvalidOwner();
     error LayerZeroReceiverTransport_InvalidStateStore();
+
     /// @custom:oz-upgrades-unsafe-allow constructor
 
     constructor(address _endpoint) OAppUpgradeable(_endpoint) {
@@ -33,7 +37,7 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         if (_stateStore == address(0)) revert LayerZeroReceiverTransport_InvalidStateStore();
         __Ownable_init(_owner);
         __OApp_init(_owner);
-        stateStore = StateStore(_stateStore);
+        _getLayerZeroReceiverTransportStorage().stateStore = StateStore(_stateStore);
     }
 
     /**
@@ -45,11 +49,39 @@ contract LayerZeroReceiverTransport is OAppUpgradeable {
         virtual
         override
     {
-        StateStore.WriteResult memory result = stateStore.write(_message);
+        StateStore.WriteResult memory result = _getLayerZeroReceiverTransportStorage().stateStore.write(_message);
         if (result.written) {
             emit MessageReceived(result.version, result.key, result.value, result.srcTimestamp);
         } else {
             emit StaleMessageIgnored(result.version, result.key, result.srcTimestamp);
+        }
+    }
+
+    // --- Getters ---
+
+    /**
+     * @notice Returns the backing state store used by this receiver transport.
+     * @return Backing state store used by this receiver transport.
+     */
+    function stateStore() public view returns (StateStore) {
+        return _getLayerZeroReceiverTransportStorage().stateStore;
+    }
+
+    /**
+     * @notice Returns the namespaced storage blob for LayerZeroReceiverTransport.
+     * @dev Storage slot derivation:
+     *      1. `namespace = keccak256("yieldnest.storage.lz_receiver_transport")`
+     *      2. `slot = 0xf15fd915d2a9a1528c951b0b7e3d2c820da02b93c5079cfc782c4509bf106392`
+     *      This repo intentionally uses one raw namespace hash per contract storage blob.
+     * @return $ LayerZeroReceiverTransport storage blob.
+     */
+    function _getLayerZeroReceiverTransportStorage()
+        internal
+        pure
+        returns (LayerZeroReceiverTransportStorage storage $)
+    {
+        assembly {
+            $.slot := 0xf15fd915d2a9a1528c951b0b7e3d2c820da02b93c5079cfc782c4509bf106392
         }
     }
 }
