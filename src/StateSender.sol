@@ -11,6 +11,7 @@ import {IRelayTransport} from "./interfaces/IRelayTransport.sol";
  */
 contract StateSender is AccessControlUpgradeable {
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 public constant TRANSPORT_MANAGER_ROLE = keccak256("TRANSPORT_MANAGER_ROLE");
 
     struct SendStateQuote {
         IRelayTransport.TransportQuote transportQuote;
@@ -41,7 +42,7 @@ contract StateSender is AccessControlUpgradeable {
 
     /**
      * @notice Initializes the sender app with its transport and read target configuration.
-     * @param _owner Address granted admin and config-manager roles.
+     * @param _owner Address granted admin, config-manager, and transport-manager roles.
      * @param _transport Transport adapter used to quote and send relay messages.
      * @param _target Contract queried via `staticcall` for relay state.
      * @param _callData Calldata used for the state read on `_target`.
@@ -54,6 +55,7 @@ contract StateSender is AccessControlUpgradeable {
         __AccessControl_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(CONFIG_MANAGER_ROLE, _owner);
+        _grantRole(TRANSPORT_MANAGER_ROLE, _owner);
         _setTransport(_transport);
         target = _target;
         callData = _callData;
@@ -64,7 +66,7 @@ contract StateSender is AccessControlUpgradeable {
      * @notice Updates the transport adapter used for quoting and sending messages.
      * @param _transport Address of the new transport adapter.
      */
-    function setTransport(address _transport) external onlyRole(CONFIG_MANAGER_ROLE) {
+    function setTransport(address _transport) external onlyRole(TRANSPORT_MANAGER_ROLE) {
         _setTransport(_transport);
     }
 

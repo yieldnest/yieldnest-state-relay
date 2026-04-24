@@ -124,10 +124,10 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         if (!supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
 
-        Entry storage e = _entries[key];
+        Entry storage latestEntry = _entries[key];
 
-        if (update.srcTimestamp <= e.srcTimestamp) {
-            emit StateIgnored(key, update.version, update.srcTimestamp, e.srcTimestamp);
+        if (update.srcTimestamp <= latestEntry.srcTimestamp) {
+            emit StateIgnored(key, update.version, update.srcTimestamp, latestEntry.srcTimestamp);
             return WriteResult({
                 written: false,
                 key: key,
@@ -137,12 +137,12 @@ contract StateStore is Initializable, AccessControlUpgradeable {
             });
         }
 
-        e.value = update.value;
-        e.version = update.version;
-        e.srcTimestamp = update.srcTimestamp;
-        e.updatedAt = uint64(block.timestamp);
+        latestEntry.value = update.value;
+        latestEntry.version = update.version;
+        latestEntry.srcTimestamp = update.srcTimestamp;
+        latestEntry.updatedAt = uint64(block.timestamp);
 
-        emit StateUpdated(key, update.version, update.srcTimestamp, e.updatedAt);
+        emit StateUpdated(key, update.version, update.srcTimestamp, latestEntry.updatedAt);
 
         return WriteResult({
             written: true,

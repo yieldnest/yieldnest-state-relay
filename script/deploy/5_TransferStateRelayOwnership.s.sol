@@ -101,9 +101,11 @@ contract TransferStateRelayOwnership is StateRelayBase {
     function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner, uint256 pk) internal {
         bool relayAdmin = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)
-            || !sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner);
+            || !sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner)
+            || !sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner);
         bool needsRenounce = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner)
-            || sender.hasRole(sender.CONFIG_MANAGER_ROLE(), relayOwner);
+            || sender.hasRole(sender.CONFIG_MANAGER_ROLE(), relayOwner)
+            || sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), relayOwner);
 
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
@@ -115,8 +117,14 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner)) {
             sender.grantRole(sender.CONFIG_MANAGER_ROLE(), nextOwner);
         }
+        if (!sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner)) {
+            sender.grantRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner);
+        }
         if (sender.hasRole(sender.CONFIG_MANAGER_ROLE(), relayOwner)) {
             sender.renounceRole(sender.CONFIG_MANAGER_ROLE(), relayOwner);
+        }
+        if (sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), relayOwner)) {
+            sender.renounceRole(sender.TRANSPORT_MANAGER_ROLE(), relayOwner);
         }
         if (sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner)) {
             sender.renounceRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner);
