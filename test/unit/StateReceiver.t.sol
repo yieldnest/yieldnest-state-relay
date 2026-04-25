@@ -57,6 +57,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(entry.value.length, 0);
         assertEq(entry.srcTimestamp, 0);
         assertEq(entry.updatedAt, 0);
+        assertEq(entry.updatedAtBlock, 0);
     }
 
     function test_receivePayload_setSupportedVersion_thenReceives() public {
@@ -74,6 +75,7 @@ contract StateReceiverTest is Test, TestHelperOz5 {
 
     function test_receivePayload_staleTimestamp_same_block_no_revert() public {
         uint64 ts = uint64(block.timestamp);
+        uint256 writeBlock = block.number;
         receiver.receivePayload(abi.encode(uint256(1), KEY, abi.encode(uint256(1e18)), ts));
 
         receiver.receivePayload(abi.encode(uint256(1), KEY, abi.encode(uint256(2e18)), ts));
@@ -83,11 +85,13 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(entry.version, 1);
         assertEq(entry.srcTimestamp, ts);
         assertEq(entry.updatedAt, ts);
+        assertEq(entry.updatedAtBlock, writeBlock);
     }
 
     function test_receivePayload_lowerTimestamp_future_block_no_revert(uint256 blocksPassed) public {
         vm.assume(blocksPassed < 100000);
         uint64 ts = uint64(block.timestamp);
+        uint256 writeBlock = block.number;
         receiver.receivePayload(abi.encode(uint256(1), KEY, abi.encode(uint256(1e18)), ts));
 
         vm.roll(block.number + blocksPassed);
@@ -99,5 +103,6 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(entry.version, 1);
         assertEq(entry.srcTimestamp, ts);
         assertEq(entry.updatedAt, ts);
+        assertEq(entry.updatedAtBlock, writeBlock);
     }
 }

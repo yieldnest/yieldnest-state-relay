@@ -136,6 +136,7 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         assertEq(abi.decode(entry.value, (uint256)), expectedAssets);
         assertEq(quoteData.key, expectedKey);
         assertEq(entry.updatedAt, block.timestamp);
+        assertEq(entry.updatedAtBlock, block.number);
     }
 
     function _assertInsufficientNativeFeeReverts() internal {

@@ -18,10 +18,11 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     }
 
     struct Entry {
-        bytes value;
         uint256 version;
         uint64 srcTimestamp;
         uint64 updatedAt;
+        uint64 updatedAtBlock;
+        bytes value;
     }
 
     struct WriteResult {
@@ -43,7 +44,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
 
     event SupportedVersionSet(uint256 version, bool previousSupported, bool newSupported);
-    event StateUpdated(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt);
+    event StateUpdated(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt, uint64 updatedAtBlock);
     event StateIgnored(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
 
     error StateStore_OwnerCannotBeZero();
@@ -151,8 +152,9 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         latestEntry.version = update.version;
         latestEntry.srcTimestamp = update.srcTimestamp;
         latestEntry.updatedAt = uint64(block.timestamp);
+        latestEntry.updatedAtBlock = uint64(block.number);
 
-        emit StateUpdated(key, update.version, update.srcTimestamp, latestEntry.updatedAt);
+        emit StateUpdated(key, update.version, update.srcTimestamp, latestEntry.updatedAt, latestEntry.updatedAtBlock);
 
         return WriteResult({
             written: true,
