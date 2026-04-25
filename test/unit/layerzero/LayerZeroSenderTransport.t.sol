@@ -75,6 +75,30 @@ contract LayerZeroSenderTransportTest is Test, TestHelperOz5 {
         assertEq(abi.decode(entry.value, (uint256)), 1e18);
     }
 
+    function test_send_manySequentially_succeeds() public {
+        uint256 N = 5;
+        bytes32[] memory keys = new bytes32[](N);
+        uint256[] memory values = new uint256[](N);
+        uint64[] memory timestamps = new uint64[](N);
+
+        for (uint256 i = 0; i < N; i++) {
+            keys[i] = keccak256(abi.encodePacked("key-", i));
+            values[i] = 1e18 + i;
+            timestamps[i] = uint64(block.timestamp + i);
+
+            bytes memory message = abi.encode(uint256(1), keys[i], abi.encode(values[i]), timestamps[i]);
+            IRelayTransport.TransportQuote memory quote = senderTransport.quoteSend(DST_CHAIN_ID, message);
+
+            senderTransport.send{value: quote.feeAmount}(DST_CHAIN_ID, message, address(this));
+            verifyPackets(DST_EID, addressToBytes32(address(receiverTransport)));
+
+            StateStore.Entry memory entry = stateStore.get(keys[i]);
+            assertEq(entry.version, 1);
+            assertEq(entry.srcTimestamp, timestamps[i]);
+            assertEq(abi.decode(entry.value, (uint256)), values[i]);
+        }
+    }
+
     function test_send_disabledDestination_reverts() public {
         vm.expectRevert(
             abi.encodeWithSelector(LayerZeroSenderTransport.LayerZeroSenderTransport_DestinationNotEnabled.selector, 999)
