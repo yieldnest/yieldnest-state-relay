@@ -109,6 +109,39 @@ contract StateSenderTest is Test, TestHelperOz5 {
         assertEq(key, expectedKey);
     }
 
+    function test_sendState_native_packetDelivered_Many_Sequential() public {
+        uint256 numSends = 5;
+
+        uint256 latestRate = 1e18;
+
+        for (uint256 i = 0; i < numSends; i++) {
+            StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+            assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
+
+            stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
+
+            verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
+
+            assertEq(messageSink.lastMessage().length, 192, "message size");
+            (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
+                abi.decode(messageSink.lastMessage(), (uint8, bytes32, bytes, uint64));
+            assertEq(msgVersion, stateSender.version());
+            assertEq(ts, block.timestamp);
+            assertEq(stateData.length, 32);
+            assertEq(abi.decode(stateData, (uint256)), latestRate);
+
+            bytes32 expectedKey = KeyDerivation.deriveKey(
+                block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
+            );
+            assertEq(key, expectedKey);
+            assertEq(quoteData.key, expectedKey);
+            assertEq(quoteData.message, messageSink.lastMessage());
+
+            latestRate += 1e18;
+            mockTarget.setRate(latestRate);
+        }
+    }
+
     function test_sendState_insufficientNativeFee_reverts() public {
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
