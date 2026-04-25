@@ -9,6 +9,7 @@ import {LayerZeroSenderTransport} from "src/layerzero/LayerZeroSenderTransport.s
 import {LayerZeroReceiverTransport} from "src/layerzero/LayerZeroReceiverTransport.sol";
 import {IRelayTransport} from "src/interfaces/IRelayTransport.sol";
 import {StateStore} from "src/StateStore.sol";
+import {IAccessControl} from "@openzeppelin/contracts/access/IAccessControl.sol";
 
 contract LayerZeroSenderTransportTest is Test, TestHelperOz5 {
     uint32 internal constant SRC_EID = 1;
@@ -104,6 +105,34 @@ contract LayerZeroSenderTransportTest is Test, TestHelperOz5 {
             abi.encodeWithSelector(LayerZeroSenderTransport.LayerZeroSenderTransport_DestinationNotEnabled.selector, 999)
         );
         senderTransport.send(999, abi.encode("payload"), address(this));
+    }
+
+    function test_send_notEnoughFee_reverts() public {
+        bytes memory message = abi.encode(uint256(1), KEY, abi.encode(uint256(1e18)), uint64(block.timestamp));
+        IRelayTransport.TransportQuote memory quote = senderTransport.quoteSend(DST_CHAIN_ID, message);
+
+        // Intentionally send less fee than required
+        uint256 insufficientFee = quote.feeAmount > 0 ? quote.feeAmount - 1 : 0;
+
+        vm.expectRevert(LayerZeroSenderTransport.LayerZeroSenderTransport_InsufficientNativeFee.selector);
+        senderTransport.send{value: insufficientFee}(DST_CHAIN_ID, message, address(this));
+    }
+
+    function test_send_revertIfNotSenderRole() public {
+        // Revoke SENDER_ROLE from this contract
+        senderTransport.revokeRole(senderTransport.SENDER_ROLE(), address(this));
+        bytes memory message = abi.encode(uint256(1), KEY, abi.encode(uint256(1e18)), uint64(block.timestamp));
+        IRelayTransport.TransportQuote memory quote = senderTransport.quoteSend(DST_CHAIN_ID, message);
+
+        // Expect revert due to missing SENDER_ROLE
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                address(this),
+                senderTransport.SENDER_ROLE()
+            )
+        );
+        senderTransport.send{value: quote.feeAmount}(DST_CHAIN_ID, message, address(this));
     }
 
     function _toAddressArray(address a, address b) internal pure returns (address[] memory arr) {
