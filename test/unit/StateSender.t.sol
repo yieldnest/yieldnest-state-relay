@@ -142,6 +142,49 @@ contract StateSenderTest is Test, TestHelperOz5 {
         }
     }
 
+    function test_sendState_native_packetDelivered_Many_AtOnce() public {
+        uint256 numSends = 5;
+
+        uint256 latestRate = 1e18;
+
+        // Store sent quotes and rates for later verification
+        StateSender.SendStateQuote[] memory quotes = new StateSender.SendStateQuote[](numSends);
+        uint256[] memory rates = new uint256[](numSends);
+
+        for (uint256 i = 0; i < numSends; i++) {
+            StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+            assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
+            quotes[i] = quoteData;
+            rates[i] = latestRate;
+
+            stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
+
+            latestRate += 1e18;
+            mockTarget.setRate(latestRate);
+        }
+
+        // verify all at once
+        verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
+
+        for (uint256 i = 0; i < numSends; i++) {
+            ( , bytes memory message) = messageSink.messageAt(i);
+            assertEq(message.length, 192, "message size");
+            (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
+                abi.decode(message, (uint8, bytes32, bytes, uint64));
+            assertEq(msgVersion, stateSender.version());
+            assertEq(ts, block.timestamp);
+            assertEq(stateData.length, 32);
+            assertEq(abi.decode(stateData, (uint256)), rates[i]);
+
+            bytes32 expectedKey = KeyDerivation.deriveKey(
+                block.chainid, address(mockTarget), abi.encodeWithSelector(MockRateTarget.getRate.selector)
+            );
+            assertEq(key, expectedKey);
+            assertEq(quotes[i].key, expectedKey);
+            assertEq(quotes[i].message, message);
+        }
+    }
+
     function test_sendState_insufficientNativeFee_reverts() public {
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
