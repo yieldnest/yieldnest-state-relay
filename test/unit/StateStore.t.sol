@@ -32,6 +32,7 @@ contract StateStoreTest is Test {
         assertEq(entry.srcTimestamp, ts);
         assertEq(entry.updatedAt, ts);
         assertEq(entry.updatedAtBlock, block.number);
+        assertEq(stateStore.length(KEY), 1);
     }
 
     function test_write_lowerTimestamp_no_revert() public {
@@ -45,6 +46,7 @@ contract StateStoreTest is Test {
         assertEq(entry.srcTimestamp, ts);
         assertEq(entry.updatedAt, ts);
         assertEq(entry.updatedAtBlock, block.number);
+        assertEq(stateStore.length(KEY), 1);
     }
 
     function test_write_strictlyIncreasingTimestamp_succeeds() public {
@@ -54,6 +56,14 @@ contract StateStoreTest is Test {
         StateStore.Entry memory entry = stateStore.get(KEY);
         assertEq(abi.decode(entry.value, (uint256)), 2e18);
         assertEq(entry.updatedAtBlock, block.number);
+        assertEq(stateStore.length(KEY), 2);
+
+        StateStore.Entry memory latestEntry = stateStore.get(KEY, 0);
+        StateStore.Entry memory previousEntry = stateStore.get(KEY, 1);
+        assertEq(abi.decode(latestEntry.value, (uint256)), 2e18);
+        assertEq(latestEntry.srcTimestamp, ts + 1);
+        assertEq(abi.decode(previousEntry.value, (uint256)), 1e18);
+        assertEq(previousEntry.srcTimestamp, ts);
     }
 
     function test_write_unsupportedVersion_reverts() public {
