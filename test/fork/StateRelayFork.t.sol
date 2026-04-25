@@ -24,17 +24,39 @@ abstract contract StateRelayForkConstants {
     bytes internal constant CONVERT_TO_ASSETS_CALLDATA = abi.encodeCall(IERC4626.convertToAssets, (ONE_SHARE));
 }
 
+abstract contract StateRelayForkAdapterHelpers is StateRelayForkConstants {
+    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
+
+    function _deployRateAdapter(
+        address stateStore_,
+        bytes32 key,
+        uint256 maxSrcStaleness,
+        uint256 maxDstStaleness,
+        uint256 maxSourceTimestampSkew
+    )
+        internal
+        returns (RateAdapterUpgradeable)
+    {
+        RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
+        bytes memory adapterInit = abi.encodeCall(
+            RateAdapterUpgradeable.initialize,
+            (stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew)
+        );
+        ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
+        return RateAdapterUpgradeable(address(adapterProxy));
+    }
+}
+
 /**
  * @notice Fork real chain state for staticcalls; delivery uses TestHelperOz5 (`verifyPackets`) in-process — not two live chains talking.
  * @dev Mainnet-only sender + MessageSink. Run: `forge test --match-contract StateRelayFork --rpc-url <MAINNET_RPC>`.
  * @dev RPC: pass a reliable mainnet URL via `--rpc-url`; set `ARBITRUM_RPC` in `.env` for the multi-fork test.
  *      Public RPCs often cause `failed to get storage` / `upstream connect error` / invalid JSON during storage reads.
  */
-abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkConstants {
+abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkAdapterHelpers {
     uint32 internal constant SRC_EID = 1;
     uint32 internal constant DST_EID = 2;
     uint256 internal constant DST_CHAIN_ID = 42161;
-    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
 
     StateSender internal stateSender;
     LayerZeroSenderTransport internal transport;
@@ -84,25 +106,6 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkC
         arr = new address[](2);
         arr[0] = a;
         arr[1] = b;
-    }
-
-    function _deployRateAdapter(
-        address stateStore_,
-        bytes32 key,
-        uint256 maxSrcStaleness,
-        uint256 maxDstStaleness,
-        uint256 maxSourceTimestampSkew
-    )
-        internal
-        returns (RateAdapterUpgradeable)
-    {
-        RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
-        bytes memory adapterInit = abi.encodeCall(
-            RateAdapterUpgradeable.initialize,
-            (stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew)
-        );
-        ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
-        return RateAdapterUpgradeable(address(adapterProxy));
     }
 
     function _assertYnEthxConvertToAssetsRelayed() internal {
@@ -158,7 +161,7 @@ contract StateRelayForkMainnetTest is StateRelayForkTestBase {
  *         StateStore + StateReceiver (harness simulates LZ payload). Models production: L1 rate → L2 store.
  * @dev Wire format to the receiver is `abi.encode(uint256 version, bytes32 key, bytes value, uint64 srcTimestamp)`.
  */
-contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayForkConstants {
+contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayForkAdapterHelpers {
     uint32 internal constant ARB_EID = 1;
 
     uint256 internal forkMainnet;
