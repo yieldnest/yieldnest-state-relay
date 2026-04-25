@@ -68,7 +68,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
             lzEid: DST_EID,
             peer: addressToBytes32(address(messageSink)),
-            options: OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0),
+            options: OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 1_000_000, 0),
             enabled: true
         });
         uint256[] memory destinationIds = new uint256[](1);
