@@ -167,7 +167,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         verifyPackets(DST_EID, addressToBytes32(address(messageSink)));
 
         for (uint256 i = 0; i < numSends; i++) {
-            ( , bytes memory message) = messageSink.messageAt(i);
+            (, bytes memory message) = messageSink.messageAt(i);
             assertEq(message.length, 192, "message size");
             (uint8 msgVersion, bytes32 key, bytes memory stateData, uint64 ts) =
                 abi.decode(message, (uint8, bytes32, bytes, uint64));

@@ -38,7 +38,8 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
 
         LayerZeroSenderTransport senderTransportImpl = new LayerZeroSenderTransport(address(endpoints[SRC_EID]));
         bytes memory senderTransportInit = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
-        senderTransport = LayerZeroSenderTransport(address(new ERC1967Proxy(address(senderTransportImpl), senderTransportInit)));
+        senderTransport =
+            LayerZeroSenderTransport(address(new ERC1967Proxy(address(senderTransportImpl), senderTransportInit)));
 
         StateSender senderImpl = new StateSender();
         bytes memory senderInit = abi.encodeCall(
@@ -80,9 +81,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR,
-                ATTACKER,
-                stateSender.TRANSPORT_MANAGER_ROLE()
+                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateSender.TRANSPORT_MANAGER_ROLE()
             )
         );
         stateSender.setTransport(address(senderTransport));
@@ -120,9 +119,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
             abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR,
-                ATTACKER,
-                stateStore.VERSION_MANAGER_ROLE()
+                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.VERSION_MANAGER_ROLE()
             )
         );
         stateStore.setSupportedVersion(2, true);
@@ -132,11 +129,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
     function test_permissions_stateStore_writeBytes_requiresWriterRole() public {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR,
-                ATTACKER,
-                stateStore.WRITER_ROLE()
-            )
+            abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.WRITER_ROLE())
         );
         stateStore.write(abi.encode(uint256(1), bytes32("k"), abi.encode(uint256(1e18)), uint64(block.timestamp)));
         vm.stopPrank();
@@ -145,11 +138,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
     function test_permissions_stateStore_writeDecoded_requiresWriterRole() public {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR,
-                ATTACKER,
-                stateStore.WRITER_ROLE()
-            )
+            abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.WRITER_ROLE())
         );
         stateStore.write(
             bytes32("k"), StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: 1})
@@ -170,9 +159,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
 
     function test_permissions_senderTransport_setPeer_requiresOwner() public {
         vm.startPrank(ATTACKER);
-        vm.expectRevert(
-            abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER)
-        );
+        vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER));
         senderTransport.setPeer(DST_EID, bytes32(uint256(1)));
         vm.stopPrank();
     }
@@ -191,9 +178,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
 
     function test_permissions_receiverTransport_setPeer_requiresOwner() public {
         vm.startPrank(ATTACKER);
-        vm.expectRevert(
-            abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER)
-        );
+        vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER));
         receiverTransport.setPeer(SRC_EID, bytes32(uint256(1)));
         vm.stopPrank();
     }

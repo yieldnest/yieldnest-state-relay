@@ -142,9 +142,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         string memory label,
         address nextOwner,
         uint256 pk
-    )
-        internal
-    {
+    ) internal {
         bool relayAdmin = transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner)
             || !transport.hasRole(transport.CONFIG_MANAGER_ROLE(), nextOwner);

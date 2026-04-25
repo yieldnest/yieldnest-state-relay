@@ -44,7 +44,9 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
 
     event SupportedVersionSet(uint256 version, bool previousSupported, bool newSupported);
-    event StateUpdated(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt, uint64 updatedAtBlock);
+    event StateUpdated(
+        bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt, uint64 updatedAtBlock
+    );
     event StateIgnored(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
 
     error StateStore_OwnerCannotBeZero();
