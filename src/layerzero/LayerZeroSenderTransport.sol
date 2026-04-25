@@ -12,6 +12,8 @@ import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
  * @notice LayerZero-specific send adapter that maps application destination IDs onto LayerZero route configuration.
  */
 contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, IRelayTransport {
+    string public constant VERSION = "0.1.0";
+
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
     bytes32 public constant SENDER_ROLE = keccak256("SENDER_ROLE");
 

@@ -9,6 +9,8 @@ import {StateStore} from "./StateStore.sol";
  * @notice Abstract reader: fetches bytes from StateStore by key and asserts staleness. Subclasses decode/validate.
  */
 abstract contract StateReaderBaseUpgradeable is Initializable {
+    string public constant VERSION = "0.1.0";
+
     /// @custom:storage-location erc7201:yieldnest.storage.state_reader_base
     struct StateReaderBaseStorage {
         StateStore stateStore;

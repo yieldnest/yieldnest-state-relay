@@ -10,6 +10,8 @@ import {IRelayTransport} from "./interfaces/IRelayTransport.sol";
  * @notice Source-chain relay app: reads state, builds canonical payload, forwards through a transport adapter.
  */
 contract StateSender is AccessControlUpgradeable {
+    string public constant VERSION = "0.1.0";
+
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
     bytes32 public constant TRANSPORT_MANAGER_ROLE = keccak256("TRANSPORT_MANAGER_ROLE");
 

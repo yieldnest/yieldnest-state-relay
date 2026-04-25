@@ -10,6 +10,8 @@ import {StateStore} from "../StateStore.sol";
  * @notice Destination-chain upgradeable OApp: receives LZ message, decodes, forwards to StateStore (stub).
  */
 contract LayerZeroReceiverTransport is OAppUpgradeable {
+    string public constant VERSION = "0.1.0";
+
     /// @custom:storage-location erc7201:yieldnest.storage.lz_receiver_transport
     struct LayerZeroReceiverTransportStorage {
         StateStore stateStore;

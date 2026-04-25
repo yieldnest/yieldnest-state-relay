@@ -9,6 +9,8 @@ import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/acce
  * @notice Key -> value registry with timestamp and writer allowlist (stub).
  */
 contract StateStore is Initializable, AccessControlUpgradeable {
+    string public constant VERSION = "0.1.0";
+
     struct StateUpdate {
         bytes value;
         uint256 version;
