@@ -102,7 +102,9 @@ contract LayerZeroSenderTransportTest is Test, TestHelperOz5 {
 
     function test_send_disabledDestination_reverts() public {
         vm.expectRevert(
-            abi.encodeWithSelector(LayerZeroSenderTransport.LayerZeroSenderTransport_DestinationNotEnabled.selector, 999)
+            abi.encodeWithSelector(
+                LayerZeroSenderTransport.LayerZeroSenderTransport_DestinationNotEnabled.selector, 999
+            )
         );
         senderTransport.send(999, abi.encode("payload"), address(this));
     }
@@ -127,9 +129,7 @@ contract LayerZeroSenderTransportTest is Test, TestHelperOz5 {
         // Expect revert due to missing SENDER_ROLE
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector,
-                address(this),
-                senderTransport.SENDER_ROLE()
+                IAccessControl.AccessControlUnauthorizedAccount.selector, address(this), senderTransport.SENDER_ROLE()
             )
         );
         senderTransport.send{value: quote.feeAmount}(DST_CHAIN_ID, message, address(this));

@@ -141,6 +141,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         Entry[] storage entries = $.entries[key];
         uint64 latestSrcTimestamp = entries.length == 0 ? 0 : entries[entries.length - 1].srcTimestamp;
 
+        // the check here implies first message is accepted for a second timestamp, and subsequent messages are rejected
         if (entries.length != 0 && update.srcTimestamp <= latestSrcTimestamp) {
             emit StateIgnored(key, update.version, update.srcTimestamp, latestSrcTimestamp);
             return WriteResult({
