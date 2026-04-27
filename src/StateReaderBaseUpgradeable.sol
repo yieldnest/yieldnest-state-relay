@@ -2,13 +2,14 @@
 pragma solidity ^0.8.22;
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import {StateStore} from "./StateStore.sol";
 
 /**
  * @title StateReaderBaseUpgradeable
  * @notice Abstract reader: fetches bytes from StateStore by key and asserts staleness. Subclasses decode/validate.
  */
-abstract contract StateReaderBaseUpgradeable is Initializable {
+abstract contract StateReaderBaseUpgradeable is Initializable, AccessControlUpgradeable {
     string public constant VERSION = "0.1.0";
 
     /// @custom:storage-location erc7201:yieldnest.storage.state_reader_base
@@ -19,6 +20,15 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
         uint256 maxDstStaleness;
         uint256 maxSourceTimestampSkew;
     }
+
+    bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 public constant STATE_STORE_MANAGER_ROLE = keccak256("STATE_STORE_MANAGER_ROLE");
+
+    event StateKeySet(bytes32 previousStateKey, bytes32 newStateKey);
+    event MaxSrcStalenessSet(uint256 previousMaxSrcStaleness, uint256 newMaxSrcStaleness);
+    event MaxDstStalenessSet(uint256 previousMaxDstStaleness, uint256 newMaxDstStaleness);
+    event MaxSourceTimestampSkewSet(uint256 previousMaxSourceTimestampSkew, uint256 newMaxSourceTimestampSkew);
+    event StateStoreSet(address indexed previousStateStore, address indexed newStateStore);
 
     error StateReaderBaseUpgradeable_ZeroAddress();
     error StateReaderBaseUpgradeable_SourceTimestampInFuture();
@@ -40,6 +50,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
 
     /**
      * @notice Initializes the store, relay key, and staleness thresholds for a reader.
+     * @param _admin Address granted the default admin, config-manager, and state-store-manager roles.
      * @param _stateStore State store contract providing relayed values.
      * @param _stateKey Relay key to read from the store.
      * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
@@ -47,6 +58,7 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
      * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
      */
     function __StateReaderBase_init(
+        address _admin,
         address _stateStore,
         bytes32 _stateKey,
         uint256 _maxSrcStaleness,
@@ -54,13 +66,71 @@ abstract contract StateReaderBaseUpgradeable is Initializable {
         uint256 _maxSourceTimestampSkew
     ) internal onlyInitializing {
         StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        if (_admin == address(0)) revert StateReaderBaseUpgradeable_ZeroAddress();
         if (_stateStore == address(0)) revert StateReaderBaseUpgradeable_ZeroAddress();
+
+        __AccessControl_init();
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        _grantRole(CONFIG_MANAGER_ROLE, _admin);
+        _grantRole(STATE_STORE_MANAGER_ROLE, _admin);
 
         $.stateStore = StateStore(_stateStore);
         $.stateKey = _stateKey;
         $.maxSrcStaleness = _maxSrcStaleness;
         $.maxDstStaleness = _maxDstStaleness;
         $.maxSourceTimestampSkew = _maxSourceTimestampSkew;
+    }
+
+    /**
+     * @notice Updates the relay key.
+     * @param _stateKey Relay key to read from the store.
+     */
+    function setStateKey(bytes32 _stateKey) external onlyRole(CONFIG_MANAGER_ROLE) {
+        StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        emit StateKeySet($.stateKey, _stateKey);
+        $.stateKey = _stateKey;
+    }
+
+    /**
+     * @notice Updates the maximum allowed source timestamp staleness.
+     * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
+     */
+    function setMaxSrcStaleness(uint256 _maxSrcStaleness) external onlyRole(CONFIG_MANAGER_ROLE) {
+        StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        emit MaxSrcStalenessSet($.maxSrcStaleness, _maxSrcStaleness);
+        $.maxSrcStaleness = _maxSrcStaleness;
+    }
+
+    /**
+     * @notice Updates the maximum allowed destination delivery staleness.
+     * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
+     */
+    function setMaxDstStaleness(uint256 _maxDstStaleness) external onlyRole(CONFIG_MANAGER_ROLE) {
+        StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        emit MaxDstStalenessSet($.maxDstStaleness, _maxDstStaleness);
+        $.maxDstStaleness = _maxDstStaleness;
+    }
+
+    /**
+     * @notice Updates the maximum allowed future skew for the source timestamp.
+     * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
+     */
+    function setMaxSourceTimestampSkew(uint256 _maxSourceTimestampSkew) external onlyRole(CONFIG_MANAGER_ROLE) {
+        StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        emit MaxSourceTimestampSkewSet($.maxSourceTimestampSkew, _maxSourceTimestampSkew);
+        $.maxSourceTimestampSkew = _maxSourceTimestampSkew;
+    }
+
+    /**
+     * @notice Updates the backing state store.
+     * @param _stateStore New state store contract providing relayed values.
+     */
+    function setStateStore(address _stateStore) external onlyRole(STATE_STORE_MANAGER_ROLE) {
+        if (_stateStore == address(0)) revert StateReaderBaseUpgradeable_ZeroAddress();
+
+        StateReaderBaseStorage storage $ = _getStateReaderBaseStorage();
+        emit StateStoreSet(address($.stateStore), _stateStore);
+        $.stateStore = StateStore(_stateStore);
     }
 
     /**

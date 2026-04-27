@@ -10,6 +10,7 @@ import {StateReaderBaseUpgradeable} from "../StateReaderBaseUpgradeable.sol";
 contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
     /**
      * @notice Initializes the adapter to read a specific relayed rate key with freshness bounds.
+     * @param _admin Address granted the default admin and reader manager roles.
      * @param _stateStore State store contract providing relayed values.
      * @param _rateKey Relay key for the rate entry.
      * @param _maxSrcStaleness Maximum allowed age of the source timestamp.
@@ -17,13 +18,16 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
      */
     function initialize(
+        address _admin,
         address _stateStore,
         bytes32 _rateKey,
         uint256 _maxSrcStaleness,
         uint256 _maxDstStaleness,
         uint256 _maxSourceTimestampSkew
     ) external initializer {
-        __StateReaderBase_init(_stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness, _maxSourceTimestampSkew);
+        __StateReaderBase_init(
+            _admin, _stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness, _maxSourceTimestampSkew
+        );
     }
 
     /**
