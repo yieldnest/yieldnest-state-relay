@@ -3,12 +3,13 @@ pragma solidity ^0.8.22;
 
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 /**
  * @title StateStore
  * @notice Key -> value registry with timestamp and writer allowlist (stub).
  */
-contract StateStore is Initializable, AccessControlUpgradeable {
+contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradeable {
     string public constant VERSION = "0.1.0";
 
     struct StateUpdate {
@@ -40,6 +41,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     }
 
     bytes32 public constant VERSION_MANAGER_ROLE = keccak256("VERSION_MANAGER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
     bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
 
@@ -68,6 +70,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     function initialize(address owner_, address[] memory writers_) external initializer {
         StateStoreStorage storage $ = _getStateStoreStorage();
         __AccessControl_init();
+        __Pausable_init();
         if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
         _grantRole(VERSION_MANAGER_ROLE, owner_);
@@ -78,6 +81,20 @@ contract StateStore is Initializable, AccessControlUpgradeable {
         }
 
         $.supportedVersions[1] = true;
+    }
+
+    /**
+     * @notice Pauses store writes.
+     */
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpauses store writes.
+     */
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 
     /**
@@ -105,7 +122,12 @@ contract StateStore is Initializable, AccessControlUpgradeable {
      * @param message Encoded relay payload containing version, key, value, and source timestamp.
      * @return result Structured write result including whether storage changed.
      */
-    function write(bytes calldata message) external onlyRole(WRITER_ROLE) returns (WriteResult memory result) {
+    function write(bytes calldata message)
+        external
+        onlyRole(WRITER_ROLE)
+        whenNotPaused
+        returns (WriteResult memory result)
+    {
         (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
             abi.decode(message, (uint256, bytes32, bytes, uint64));
         StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
@@ -122,6 +144,7 @@ contract StateStore is Initializable, AccessControlUpgradeable {
     function write(bytes32 key, StateUpdate calldata update)
         external
         onlyRole(WRITER_ROLE)
+        whenNotPaused
         returns (WriteResult memory result)
     {
         return _write(key, update);

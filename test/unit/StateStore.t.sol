@@ -4,6 +4,7 @@ pragma solidity ^0.8.22;
 import {Test} from "forge-std/Test.sol";
 import {StateStore} from "src/StateStore.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 contract StateStoreTest is Test {
     StateStore public stateStore;
@@ -14,6 +15,7 @@ contract StateStoreTest is Test {
         bytes memory initData = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateStore = StateStore(address(proxy));
+        stateStore.grantRole(stateStore.PAUSER_ROLE(), address(this));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(this));
     }
 
@@ -69,5 +71,12 @@ contract StateStoreTest is Test {
     function test_write_unsupportedVersion_reverts() public {
         vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_UnsupportedVersion.selector, uint256(2)));
         stateStore.write(KEY, StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 2, srcTimestamp: 1}));
+    }
+
+    function test_write_whenPaused_reverts() public {
+        stateStore.pause();
+
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        stateStore.write(KEY, _update(1e18, uint64(block.timestamp)));
     }
 }

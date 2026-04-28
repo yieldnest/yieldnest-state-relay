@@ -2,6 +2,7 @@
 pragma solidity ^0.8.22;
 
 import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {KeyDerivation} from "./KeyDerivation.sol";
 import {IRelayTransport} from "./interfaces/IRelayTransport.sol";
 
@@ -9,10 +10,11 @@ import {IRelayTransport} from "./interfaces/IRelayTransport.sol";
  * @title StateSender
  * @notice Source-chain relay app: reads state, builds canonical payload, forwards through a transport adapter.
  */
-contract StateSender is AccessControlUpgradeable {
+contract StateSender is AccessControlUpgradeable, PausableUpgradeable {
     string public constant VERSION = "0.1.0";
 
     bytes32 public constant CONFIG_MANAGER_ROLE = keccak256("CONFIG_MANAGER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
     bytes32 public constant TRANSPORT_MANAGER_ROLE = keccak256("TRANSPORT_MANAGER_ROLE");
 
     struct SendStateQuote {
@@ -59,6 +61,7 @@ contract StateSender is AccessControlUpgradeable {
     {
         StateSenderStorage storage $ = _getStateSenderStorage();
         __AccessControl_init();
+        __Pausable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(CONFIG_MANAGER_ROLE, _owner);
         _grantRole(TRANSPORT_MANAGER_ROLE, _owner);
@@ -66,6 +69,20 @@ contract StateSender is AccessControlUpgradeable {
         $.target = _target;
         $.callData = _callData;
         $.version = _version;
+    }
+
+    /**
+     * @notice Pauses relay sends.
+     */
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpauses relay sends.
+     */
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
     }
 
     /**
@@ -128,7 +145,7 @@ contract StateSender is AccessControlUpgradeable {
      * @notice Reads the current state, quotes the fee, and sends the relay message.
      * @param destinationId Application-level destination identifier understood by the transport.
      */
-    function sendState(uint256 destinationId) external payable {
+    function sendState(uint256 destinationId) external payable whenNotPaused {
         SendStateQuote memory quoteData = quoteSendState(destinationId);
         if (msg.value < quoteData.transportQuote.feeAmount) revert StateSender_InsufficientNativeFee();
         _getStateSenderStorage().transport.send{value: msg.value}(destinationId, quoteData.message, msg.sender);

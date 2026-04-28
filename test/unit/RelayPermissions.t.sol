@@ -88,6 +88,17 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         vm.stopPrank();
     }
 
+    function test_permissions_stateSender_pause_requiresDefaultAdminRole() public {
+        vm.startPrank(ATTACKER);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateSender.PAUSER_ROLE()
+            )
+        );
+        stateSender.pause();
+        vm.stopPrank();
+    }
+
     function test_permissions_stateSender_configMutators_requireConfigManagerRole() public {
         vm.startPrank(ATTACKER);
 
@@ -123,6 +134,17 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
             )
         );
         stateStore.setSupportedVersion(2, true);
+        vm.stopPrank();
+    }
+
+    function test_permissions_stateStore_pause_requiresDefaultAdminRole() public {
+        vm.startPrank(ATTACKER);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.PAUSER_ROLE()
+            )
+        );
+        stateStore.pause();
         vm.stopPrank();
     }
 
@@ -180,6 +202,13 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         vm.startPrank(ATTACKER);
         vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER));
         receiverTransport.setPeer(SRC_EID, bytes32(uint256(1)));
+        vm.stopPrank();
+    }
+
+    function test_permissions_receiverTransport_pause_requiresOwner() public {
+        vm.startPrank(ATTACKER);
+        vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER));
+        receiverTransport.pause();
         vm.stopPrank();
     }
 

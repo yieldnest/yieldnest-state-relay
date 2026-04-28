@@ -7,6 +7,7 @@ import {StateReceiverHarness} from "test/mocks/StateReceiverHarness.sol";
 import {StateStore} from "src/StateStore.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 contract StateReceiverTest is Test, TestHelperOz5 {
     uint32 constant EID = 1;
@@ -106,5 +107,12 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         assertEq(entry.updatedAt, ts);
         assertEq(entry.updatedAtBlock, writeBlock);
         assertEq(stateStore.length(KEY), 1);
+    }
+
+    function test_receivePayload_whenPaused_reverts() public {
+        receiver.pause();
+
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        receiver.receivePayload(abi.encode(uint256(1), KEY, abi.encode(uint256(1e18)), uint64(block.timestamp)));
     }
 }

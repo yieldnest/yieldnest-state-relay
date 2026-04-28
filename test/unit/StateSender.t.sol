@@ -10,6 +10,7 @@ import {MockRateTarget} from "test/mocks/MockRateTarget.sol";
 import {MessageSink} from "test/mocks/MessageSink.sol";
 import {TestHelperOz5} from "@layerzerolabs/test-devtools-evm-foundry/TestHelperOz5.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
 contract StateSenderTest is Test, TestHelperOz5 {
@@ -48,6 +49,7 @@ contract StateSenderTest is Test, TestHelperOz5 {
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
+        stateSender.grantRole(stateSender.PAUSER_ROLE(), address(this));
         transport.grantRole(transport.SENDER_ROLE(), address(stateSender));
 
         StateSenderQuoteHarness quoteImpl = new StateSenderQuoteHarness(address(endpoints[SRC_EID]));
@@ -189,6 +191,14 @@ contract StateSenderTest is Test, TestHelperOz5 {
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
         stateSender.sendState{value: quoteData.transportQuote.feeAmount - 1}(DST_CHAIN_ID);
+    }
+
+    function test_sendState_whenPaused_reverts() public {
+        stateSender.pause();
+
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
     }
 
     function test_staticcallFailure_reverts() public {
