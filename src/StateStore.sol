@@ -1,0 +1,262 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.22;
+
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {AccessControlUpgradeable} from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import {PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+
+/**
+ * @title StateStore
+ * @notice Key -> value registry with timestamp and writer allowlist (stub).
+ */
+contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradeable {
+    string public constant VERSION = "0.1.0";
+
+    struct StateUpdate {
+        bytes value;
+        uint256 version;
+        uint64 srcTimestamp;
+    }
+
+    struct Entry {
+        uint256 version;
+        uint64 srcTimestamp;
+        uint64 updatedAt;
+        uint64 updatedAtBlock;
+        bytes value;
+    }
+
+    struct WriteResult {
+        bool written;
+        bytes32 key;
+        bytes value;
+        uint256 version;
+        uint64 srcTimestamp;
+    }
+
+    /// @custom:storage-location erc7201:yieldnest.storage.state_store
+    struct StateStoreStorage {
+        mapping(bytes32 key => Entry[] entries) entries;
+        mapping(uint256 version => bool supported) supportedVersions;
+    }
+
+    bytes32 public constant VERSION_MANAGER_ROLE = keccak256("VERSION_MANAGER_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant WRITER_MANAGER_ROLE = keccak256("WRITER_MANAGER_ROLE");
+    bytes32 public constant WRITER_ROLE = keccak256("WRITER_ROLE");
+
+    event SupportedVersionSet(uint256 version, bool previousSupported, bool newSupported);
+    event StateUpdated(
+        bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 updatedAt, uint64 updatedAtBlock
+    );
+    event StateIgnored(bytes32 indexed key, uint256 version, uint64 srcTimestamp, uint64 storedSrcTimestamp);
+
+    error StateStore_OwnerCannotBeZero();
+    error StateStore_NotWriter();
+    error StateStore_EntryNotFound(bytes32 key);
+    error StateStore_UnsupportedVersion(uint256 version);
+
+    /// @custom:oz-upgrades-unsafe-allow constructor
+
+    constructor() {
+        _disableInitializers();
+    }
+
+    /**
+     * @notice Initializes the store and seeds its initial writer set.
+     * @param owner_ Address granted the default admin, version-manager, and writer-manager roles.
+     * @param writers_ Addresses granted the writer role at initialization.
+     */
+    function initialize(address owner_, address[] memory writers_) external initializer {
+        StateStoreStorage storage $ = _getStateStoreStorage();
+        __AccessControl_init();
+        __Pausable_init();
+        if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
+        _grantRole(DEFAULT_ADMIN_ROLE, owner_);
+        _grantRole(VERSION_MANAGER_ROLE, owner_);
+        _grantRole(WRITER_MANAGER_ROLE, owner_);
+        _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);
+        for (uint256 i = 0; i < writers_.length; i++) {
+            _grantRole(WRITER_ROLE, writers_[i]);
+        }
+
+        $.supportedVersions[1] = true;
+    }
+
+    /**
+     * @notice Pauses store writes.
+     */
+    function pause() external onlyRole(PAUSER_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @notice Unpauses store writes.
+     */
+    function unpause() external onlyRole(PAUSER_ROLE) {
+        _unpause();
+    }
+
+    /**
+     * @notice Returns whether an account is authorized to write relay updates.
+     * @param account Address to query.
+     * @return True if `account` holds `WRITER_ROLE`.
+     */
+    function isWriter(address account) public view returns (bool) {
+        return hasRole(WRITER_ROLE, account);
+    }
+
+    /**
+     * @notice Enables or disables a supported relay message version.
+     * @param version Version value to update.
+     * @param supported Whether the version should be accepted.
+     */
+    function setSupportedVersion(uint256 version, bool supported) external onlyRole(VERSION_MANAGER_ROLE) {
+        StateStoreStorage storage $ = _getStateStoreStorage();
+        emit SupportedVersionSet(version, $.supportedVersions[version], supported);
+        $.supportedVersions[version] = supported;
+    }
+
+    /**
+     * @notice Decodes a raw relay payload and applies it to the store.
+     * @param message Encoded relay payload containing version, key, value, and source timestamp.
+     * @return result Structured write result including whether storage changed.
+     */
+    function write(bytes calldata message)
+        external
+        onlyRole(WRITER_ROLE)
+        whenNotPaused
+        returns (WriteResult memory result)
+    {
+        (uint256 version, bytes32 key, bytes memory value, uint64 srcTimestamp) =
+            abi.decode(message, (uint256, bytes32, bytes, uint64));
+        StateUpdate memory update = StateUpdate({value: value, version: version, srcTimestamp: srcTimestamp});
+
+        return _write(key, update);
+    }
+
+    /**
+     * @notice Applies a decoded state update for a specific key.
+     * @param key Deterministic relay key for the value being written.
+     * @param update Decoded state update payload.
+     * @return result Structured write result including whether storage changed.
+     */
+    function write(bytes32 key, StateUpdate calldata update)
+        external
+        onlyRole(WRITER_ROLE)
+        whenNotPaused
+        returns (WriteResult memory result)
+    {
+        return _write(key, update);
+    }
+
+    /**
+     * @notice Applies a decoded state update after writer and version checks.
+     * @param key Deterministic relay key for the value being updated.
+     * @param update Decoded state update payload.
+     * @return result Structured write result including whether storage changed.
+     */
+    function _write(bytes32 key, StateUpdate memory update) internal returns (WriteResult memory result) {
+        StateStoreStorage storage $ = _getStateStoreStorage();
+        if (!isWriter(msg.sender)) revert StateStore_NotWriter();
+        if (!$.supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
+
+        // Entries are stored in an append-only array. Last one is the latest.
+        Entry[] storage entries = $.entries[key];
+        uint64 latestSrcTimestamp = entries.length == 0 ? 0 : entries[entries.length - 1].srcTimestamp;
+
+        // the check here implies first message is accepted for a second timestamp, and subsequent messages are rejected
+        if (entries.length != 0 && update.srcTimestamp <= latestSrcTimestamp) {
+            emit StateIgnored(key, update.version, update.srcTimestamp, latestSrcTimestamp);
+            return WriteResult({
+                written: false,
+                key: key,
+                value: update.value,
+                version: update.version,
+                srcTimestamp: update.srcTimestamp
+            });
+        }
+
+        Entry storage newEntry = entries.push();
+        newEntry.version = update.version;
+        newEntry.srcTimestamp = update.srcTimestamp;
+        newEntry.updatedAt = uint64(block.timestamp);
+        newEntry.updatedAtBlock = uint64(block.number);
+        newEntry.value = update.value;
+
+        emit StateUpdated(key, update.version, update.srcTimestamp, newEntry.updatedAt, newEntry.updatedAtBlock);
+
+        return WriteResult({
+            written: true,
+            key: key,
+            value: update.value,
+            version: update.version,
+            srcTimestamp: update.srcTimestamp
+        });
+    }
+
+    // --- Getters ---
+
+    /**
+     * @notice Returns whether a relay message version is supported.
+     * @param version Version value to query.
+     * @return True if the version is currently accepted.
+     */
+    function supportedVersions(uint256 version) public view returns (bool) {
+        return _getStateStoreStorage().supportedVersions[version];
+    }
+
+    /**
+     * @notice Returns the stored entry for a relay key.
+     * @param key Deterministic relay key to read.
+     * @return Stored latest entry for `key`.
+     */
+    function get(bytes32 key) external view returns (Entry memory) {
+        return _get(key, 0);
+    }
+
+    /**
+     * @notice Returns a historical entry for a relay key, indexed from the end.
+     * @param key Deterministic relay key to read.
+     * @param reverseIndex Zero-based reverse index where `0` is the latest entry.
+     * @return Stored entry at `reverseIndex` from the end for `key`.
+     */
+    function get(bytes32 key, uint256 reverseIndex) external view returns (Entry memory) {
+        return _get(key, reverseIndex);
+    }
+
+    /**
+     * @notice Returns a stored entry for a relay key, indexed from the end.
+     * @param key Deterministic relay key to read.
+     * @param reverseIndex Zero-based reverse index where `0` is the latest entry.
+     * @return Stored entry at `reverseIndex` from the end for `key`.
+     */
+    function _get(bytes32 key, uint256 reverseIndex) internal view returns (Entry memory) {
+        Entry[] storage entries = _getStateStoreStorage().entries[key];
+        if (entries.length == 0) revert StateStore_EntryNotFound(key);
+        return entries[entries.length - 1 - reverseIndex];
+    }
+
+    /**
+     * @notice Returns the number of stored entries for a relay key.
+     * @param key Deterministic relay key to query.
+     * @return Number of stored historical entries for `key`.
+     */
+    function length(bytes32 key) external view returns (uint256) {
+        return _getStateStoreStorage().entries[key].length;
+    }
+
+    /**
+     * @notice Returns the namespaced storage blob for StateStore.
+     * @dev Storage slot derivation:
+     *      1. `namespace = keccak256("yieldnest.storage.state_store")`
+     *      2. `slot = 0x5224f9d9226b43d24c2ffcb41b9e4bca8fa471c2e64183e81dab7b258857cb32`
+     *      This repo intentionally uses one raw namespace hash per contract storage blob.
+     * @return $ StateStore storage blob.
+     */
+    function _getStateStoreStorage() internal pure returns (StateStoreStorage storage $) {
+        assembly {
+            $.slot := 0x5224f9d9226b43d24c2ffcb41b9e4bca8fa471c2e64183e81dab7b258857cb32
+        }
+    }
+}
