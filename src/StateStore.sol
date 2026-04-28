@@ -161,6 +161,7 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
         if (!isWriter(msg.sender)) revert StateStore_NotWriter();
         if (!$.supportedVersions[update.version]) revert StateStore_UnsupportedVersion(update.version);
 
+        // Entries are stored in an append-only array. Last one is the latest.
         Entry[] storage entries = $.entries[key];
         uint64 latestSrcTimestamp = entries.length == 0 ? 0 : entries[entries.length - 1].srcTimestamp;
 
