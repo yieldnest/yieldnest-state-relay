@@ -205,9 +205,13 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         vm.stopPrank();
     }
 
-    function test_permissions_receiverTransport_pause_requiresOwner() public {
+    function test_permissions_receiverTransport_pause_requiresPauserRole() public {
         vm.startPrank(ATTACKER);
-        vm.expectRevert(abi.encodeWithSelector(OWNABLE_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, receiverTransport.PAUSER_ROLE()
+            )
+        );
         receiverTransport.pause();
         vm.stopPrank();
     }
