@@ -15,12 +15,25 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
+interface IVault {
+
+    struct AssetParams {
+        uint256 index;
+        bool active;
+        uint8 decimals;
+    }
+
+    function getAsset(address asset_) external view returns (AssetParams memory);
+}
+
 /// @dev Canonical ynETHx on Ethereum L1 + shared calldata for `convertToAssets(1e18)`.
 abstract contract StateRelayForkConstants {
     address internal constant YNETHX_MAINNET = 0x657d9ABA1DBb59e53f9F3eCAA878447dCfC96dCb;
+    address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     uint256 internal constant ONE_SHARE = 1e18;
     bytes internal constant CONVERT_TO_ASSETS_CALLDATA = abi.encodeCall(IERC4626.convertToAssets, (ONE_SHARE));
+    bytes internal constant GET_WETH_ASSET_CALLDATA = abi.encodeCall(IVault.getAsset, (WETH));
 }
 
 abstract contract StateRelayForkAdapterHelpers is StateRelayForkConstants {
@@ -143,6 +156,40 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         assertEq(entry.updatedAtBlock, block.number);
     }
 
+    function _assertYnEthxGetAssetRelayed() internal {
+        (bool ok, bytes memory ret) = ynEthx.staticcall(GET_WETH_ASSET_CALLDATA);
+        require(ok, "fork: convertToAssets staticcall failed");
+        IVault.AssetParams memory expectedEntry = abi.decode(ret, (IVault.AssetParams));
+   
+        assertEq(expectedEntry.index, 0);
+        assertTrue(expectedEntry.active);
+        assertEq(expectedEntry.decimals, 18);
+
+        stateSender.setCallData(GET_WETH_ASSET_CALLDATA);
+
+        StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
+        assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
+
+        stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
+        verifyPackets(DST_EID, addressToBytes32(address(receiverTransport)));
+
+        bytes32 expectedKey = KeyDerivation.deriveKey(block.chainid, ynEthx, GET_WETH_ASSET_CALLDATA);
+        StateStore.Entry memory entry = destinationStateStore.get(expectedKey);
+
+        assertEq(entry.version, 1, "relay version");
+        assertEq(entry.srcTimestamp, block.timestamp);
+        assertEq(entry.value.length, 96);
+        {
+            IVault.AssetParams memory resultEntry = abi.decode(entry.value, (IVault.AssetParams));
+            assertEq(resultEntry.index, expectedEntry.index);
+            assertTrue(resultEntry.active);
+            assertEq(resultEntry.decimals, expectedEntry.decimals);
+        }
+        assertEq(quoteData.key, expectedKey);
+        assertEq(entry.updatedAt, block.timestamp);
+        assertEq(entry.updatedAtBlock, block.number);
+    }
+
     function _assertInsufficientNativeFeeReverts() internal {
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
@@ -158,6 +205,10 @@ contract StateRelayForkMainnetTest is StateRelayForkTestBase {
 
     function test_fork_mainnet_sendState_relayedViaLzHelper_ynEthxConvertToAssets() public {
         _assertYnEthxConvertToAssetsRelayed();
+    }
+
+    function test_fork_mainnet_sendState_relayedViaLzHelper_ynEthxGetAsset() public {
+        _assertYnEthxGetAssetRelayed();
     }
 
     function test_fork_mainnet_sendState_insufficientNativeFee_reverts() public {
