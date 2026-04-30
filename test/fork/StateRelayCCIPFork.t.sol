@@ -60,7 +60,7 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
     Register.NetworkDetails internal arbitrumNetworkDetails;
 
     function setUp() public {
-        forkMainnet = vm.createSelectFork(vm.envString("ETH_MAINNET_RPC"));
+        forkMainnet = vm.createSelectFork(vm.envString("ETH_MAINNET_RPC_URL"));
         forkArbitrum = vm.createFork(vm.envString("ARBITRUM_RPC"));
 
         ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
