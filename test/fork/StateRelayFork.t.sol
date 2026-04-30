@@ -311,6 +311,26 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         assertEq(adapter.getRate(), expectedRate);
     }
 
+    function test_fork_mainnet_getAsset_writtenOnArbitrumStateStore() public {
+        vm.selectFork(forkMainnet);
+
+        (bool ok, bytes memory stateData) = YNETHX_MAINNET.staticcall(GET_WETH_ASSET_CALLDATA);
+        require(ok, "mainnet: getAsset failed");
+        IVault.AssetParams memory expectedEntry = abi.decode(stateData, (IVault.AssetParams));
+
+        (StateStore stateStore, bytes32 key, bytes memory stored,) =
+            _readMainnetAndDeliverToArbitrumForCalldata(YNETHX_MAINNET, GET_WETH_ASSET_CALLDATA);
+
+        assertEq(stored, stateData);
+        StateStore.Entry memory entry = stateStore.get(key);
+        assertEq(entry.value.length, 96);
+
+        IVault.AssetParams memory resultEntry = abi.decode(entry.value, (IVault.AssetParams));
+        assertEq(resultEntry.index, expectedEntry.index);
+        assertEq(resultEntry.active, expectedEntry.active);
+        assertEq(resultEntry.decimals, expectedEntry.decimals);
+    }
+
     /// @dev Proves `StateReaderBase` accepts fresh delivery under a short `maxSrc` / `maxDst` window.
     function test_fork_mainnetToArbitrum_rateAdapter_passesShortStaleness() public {
         (StateStore stateStore, bytes32 key, uint256 expectedRate,) = _readMainnetAndDeliverToArbitrum();
