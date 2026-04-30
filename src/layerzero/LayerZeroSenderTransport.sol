@@ -70,10 +70,7 @@ contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, 
             DestinationConfig calldata config = configs[i];
             uint256 destinationId = destinationIds[i];
             $.destinations[destinationId] = DestinationConfig({
-                lzEid: config.lzEid,
-                peer: config.peer,
-                options: config.options,
-                enabled: config.enabled
+                lzEid: config.lzEid, peer: config.peer, options: config.options, enabled: config.enabled
             });
             setPeer(config.lzEid, config.peer);
             emit DestinationSet(destinationId, config.lzEid, config.peer, config.options, config.enabled);

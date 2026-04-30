@@ -187,11 +187,7 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
         emit StateUpdated(key, update.version, update.srcTimestamp, newEntry.updatedAt, newEntry.updatedAtBlock);
 
         return WriteResult({
-            written: true,
-            key: key,
-            value: update.value,
-            version: update.version,
-            srcTimestamp: update.srcTimestamp
+            written: true, key: key, value: update.value, version: update.version, srcTimestamp: update.srcTimestamp
         });
     }
 

@@ -31,7 +31,7 @@ contract TestCCIPReceiverTransport is CCIPReceiver, Ownable {
     }
 
     function _ccipReceive(Client.Any2EVMMessage memory message) internal override {
-        address sender = abi.decode(message.sender, (address));
+        address sender = _decodeSender(message.sender);
         if (message.sourceChainSelector != trustedSourceChainSelector || sender != trustedSender) {
             revert TestCCIPReceiverTransport_InvalidSource(message.sourceChainSelector, sender);
         }
@@ -41,6 +41,20 @@ contract TestCCIPReceiverTransport is CCIPReceiver, Ownable {
             emit MessageReceived(result.version, result.key, result.value, result.srcTimestamp);
         } else {
             emit StaleMessageIgnored(result.version, result.key, result.srcTimestamp);
+        }
+    }
+
+    function _decodeSender(bytes memory encodedSender) internal pure returns (address sender) {
+        if (encodedSender.length == 20) {
+            return address(bytes20(encodedSender));
+        }
+
+        if (encodedSender.length == 32) {
+            return address(uint160(uint256(bytes32(encodedSender))));
+        }
+
+        assembly {
+            sender := shr(96, mload(add(encodedSender, 32)))
         }
     }
 }

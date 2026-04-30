@@ -55,14 +55,18 @@ contract TestRateAdapterTest is Test {
     function test_getRate_decodesDifferentRates() public {
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(2e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(2e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         assertEq(rateAdapter.getRate(), 2e18);
 
         vm.warp(block.timestamp + 1);
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(99e6)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(99e6)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         assertEq(rateAdapter.getRate(), 99e6);
     }
@@ -103,9 +107,7 @@ contract TestRateAdapterTest is Test {
         stateStore.write(
             rateKey,
             StateStore.StateUpdate({
-                value: abi.encode(1e18),
-                version: 1,
-                srcTimestamp: uint64(block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW)
+                value: abi.encode(1e18), version: 1, srcTimestamp: uint64(block.timestamp + MAX_SOURCE_TIMESTAMP_SKEW)
             })
         );
         assertEq(rateAdapter.getRate(), 1e18);
@@ -189,7 +191,9 @@ contract TestRateAdapterTest is Test {
 
         stateStore.write(
             newRateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         assertEq(rateAdapter.getRate(), 3e18);
     }
@@ -247,7 +251,9 @@ contract TestRateAdapterTest is Test {
 
         newStateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(4e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(4e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         rateAdapter.setStateStore(address(newStateStore));
 

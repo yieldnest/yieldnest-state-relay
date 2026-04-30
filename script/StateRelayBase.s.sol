@@ -122,11 +122,7 @@ contract StateRelayBase is BaseData {
             require(isSupportedChainId(sChain), "StateRelay: sender chainId not in BaseData");
             senderLabels.push(label);
             senderByLabel[label] = SenderInput({
-                chainId: sChain,
-                target: target,
-                callData: callData,
-                refundAddress: refund,
-                protocolVersion: pVer
+                chainId: sChain, target: target, callData: callData, refundAddress: refund, protocolVersion: pVer
             });
             _pushUniqueChainId(sChain);
         }
@@ -270,16 +266,12 @@ contract StateRelayBase is BaseData {
             StateSender.initialize, (relayOwner, address(transportProxy), s.target, s.callData, s.protocolVersion)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
-        LayerZeroSenderTransport(address(transportProxy)).grantRole(
-            LayerZeroSenderTransport(address(transportProxy)).SENDER_ROLE(), address(proxy)
-        );
+        LayerZeroSenderTransport(address(transportProxy))
+            .grantRole(LayerZeroSenderTransport(address(transportProxy)).SENDER_ROLE(), address(proxy));
         LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
             new LayerZeroSenderTransport.DestinationConfig[](1);
         destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
-            lzEid: getEID(receiverChainId),
-            peer: bytes32(0),
-            options: defaultSendOptions(),
-            enabled: true
+            lzEid: getEID(receiverChainId), peer: bytes32(0), options: defaultSendOptions(), enabled: true
         });
         uint256[] memory destinationIds = new uint256[](1);
         destinationIds[0] = receiverChainId;

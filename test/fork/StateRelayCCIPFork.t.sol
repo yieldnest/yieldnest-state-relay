@@ -26,19 +26,26 @@ interface ITestCCIPStateSourceView {
 
 abstract contract StateRelayCCIPForkConstants {
     address internal constant ASSET = 0x1111111111111111111111111111111111111111;
+    address internal constant ETHEREUM_MAINNET_CCIP_ROUTER = 0x80226fc0Ee2b096224EeAc085Bb9a8cba1146f7D;
+    address internal constant ARBITRUM_ONE_CCIP_ROUTER = 0x141fa059441E0ca23ce184B6A78bafD2A517DdE8;
+    address internal constant MAINNET_WRAPPED_NATIVE = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+    address internal constant ARBITRUM_WRAPPED_NATIVE = 0x82aF49447D8a07e3bd95BD0d56f35241523fBab1;
+
+    uint64 internal constant ETHEREUM_MAINNET_CHAIN_SELECTOR = 5009297550715157269;
+    uint64 internal constant ARBITRUM_ONE_CHAIN_SELECTOR = 4949039107694359620;
 
     uint256 internal constant ONE_SHARE = 1e18;
-    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
-    uint256 internal constant STALENESS = 1 hours;
-    uint256 internal constant DST_CHAIN_ID = 421614;
+    uint256 internal constant MAX_SOURCE_TIMESTAMP_SKEW = 30 days;
+    uint256 internal constant STALENESS = 30 days;
+    uint256 internal constant DST_CHAIN_ID = 42161;
 
     bytes internal constant CONVERT_TO_ASSETS_CALLDATA = abi.encodeCall(IERC4626.convertToAssets, (ONE_SHARE));
     bytes internal constant GET_ASSET_CALLDATA = abi.encodeCall(ITestCCIPStateSourceView.getAsset, (ASSET));
 }
 
 contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
-    uint256 internal forkSepolia;
-    uint256 internal forkArbitrumSepolia;
+    uint256 internal forkMainnet;
+    uint256 internal forkArbitrum;
 
     CCIPLocalSimulatorFork internal ccipLocalSimulatorFork;
 
@@ -49,36 +56,33 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
     StateStore internal destinationStateStore;
     TestCCIPReceiverTransport internal receiverTransport;
 
-    Register.NetworkDetails internal sepoliaNetworkDetails;
-    Register.NetworkDetails internal arbitrumSepoliaNetworkDetails;
+    Register.NetworkDetails internal mainnetNetworkDetails;
+    Register.NetworkDetails internal arbitrumNetworkDetails;
 
     function setUp() public {
-        forkSepolia = vm.createSelectFork(vm.envString("ETHEREUM_SEPOLIA_RPC_URL"));
-        forkArbitrumSepolia = vm.createFork(vm.envString("ARBITRUM_SEPOLIA_RPC_URL"));
+        forkMainnet = vm.createSelectFork(vm.envString("ETH_MAINNET_RPC"));
+        forkArbitrum = vm.createFork(vm.envString("ARBITRUM_RPC"));
 
         ccipLocalSimulatorFork = new CCIPLocalSimulatorFork();
         vm.makePersistent(address(ccipLocalSimulatorFork));
 
-        sepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        vm.selectFork(forkArbitrumSepolia);
-        arbitrumSepoliaNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
-        vm.selectFork(forkSepolia);
+        _configureMainnetNetworkDetails();
 
         _deploySource();
         _deployDestination();
     }
 
-    function test_fork_sepolia_sendState_relayedViaCCIP_convertToAssets() public {
-        vm.selectFork(forkSepolia);
+    function test_fork_mainnet_sendState_relayedViaCCIP_convertToAssets() public {
+        vm.selectFork(forkMainnet);
 
         uint256 expectedAssets = stateSource.convertToAssets(ONE_SHARE);
 
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
 
-        ccipLocalSimulatorFork.switchChainAndRouteMessage(forkArbitrumSepolia);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(forkArbitrum);
 
-        vm.selectFork(forkArbitrumSepolia);
+        vm.selectFork(forkArbitrum);
 
         bytes32 expectedKey = KeyDerivation.deriveKey(1, address(stateSource), CONVERT_TO_ASSETS_CALLDATA);
         StateStore.Entry memory entry = destinationStateStore.get(expectedKey);
@@ -91,8 +95,8 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
         assertEq(adapter.getRate(), expectedAssets);
     }
 
-    function test_fork_sepolia_sendState_relayedViaCCIP_getAsset() public {
-        vm.selectFork(forkSepolia);
+    function test_fork_mainnet_sendState_relayedViaCCIP_getAsset() public {
+        vm.selectFork(forkMainnet);
 
         ITestCCIPStateSourceView.AssetParams memory expectedEntry =
             ITestCCIPStateSourceView(address(stateSource)).getAsset(ASSET);
@@ -101,9 +105,9 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         stateSender.sendState{value: quoteData.transportQuote.feeAmount}(DST_CHAIN_ID);
 
-        ccipLocalSimulatorFork.switchChainAndRouteMessage(forkArbitrumSepolia);
+        ccipLocalSimulatorFork.switchChainAndRouteMessage(forkArbitrum);
 
-        vm.selectFork(forkArbitrumSepolia);
+        vm.selectFork(forkArbitrum);
 
         bytes32 expectedKey = KeyDerivation.deriveKey(1, address(stateSource), GET_ASSET_CALLDATA);
         StateStore.Entry memory entry = destinationStateStore.get(expectedKey);
@@ -118,24 +122,60 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
         assertEq(resultEntry.decimals, expectedEntry.decimals);
     }
 
-    function test_fork_sepolia_sendState_insufficientNativeFee_reverts() public {
-        vm.selectFork(forkSepolia);
+    function test_fork_mainnet_sendState_insufficientNativeFee_reverts() public {
+        vm.selectFork(forkMainnet);
 
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         vm.expectRevert(StateSender.StateSender_InsufficientNativeFee.selector);
         stateSender.sendState{value: quoteData.transportQuote.feeAmount - 1}(DST_CHAIN_ID);
     }
 
-    function _deploySource() internal {
-        vm.selectFork(forkSepolia);
+    function _configureMainnetNetworkDetails() internal {
+        vm.selectFork(forkMainnet);
+        ccipLocalSimulatorFork.setNetworkDetails(
+            1,
+            Register.NetworkDetails({
+                chainSelector: ETHEREUM_MAINNET_CHAIN_SELECTOR,
+                routerAddress: ETHEREUM_MAINNET_CCIP_ROUTER,
+                linkAddress: address(0),
+                wrappedNativeAddress: MAINNET_WRAPPED_NATIVE,
+                ccipBnMAddress: address(0),
+                ccipLnMAddress: address(0),
+                rmnProxyAddress: address(0),
+                registryModuleOwnerCustomAddress: address(0),
+                tokenAdminRegistryAddress: address(0)
+            })
+        );
+        mainnetNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
 
-        senderTransport = new TestCCIPSenderTransport(sepoliaNetworkDetails.routerAddress, address(this));
+        vm.selectFork(forkArbitrum);
+        ccipLocalSimulatorFork.setNetworkDetails(
+            42161,
+            Register.NetworkDetails({
+                chainSelector: ARBITRUM_ONE_CHAIN_SELECTOR,
+                routerAddress: ARBITRUM_ONE_CCIP_ROUTER,
+                linkAddress: address(0),
+                wrappedNativeAddress: ARBITRUM_WRAPPED_NATIVE,
+                ccipBnMAddress: address(0),
+                ccipLnMAddress: address(0),
+                rmnProxyAddress: address(0),
+                registryModuleOwnerCustomAddress: address(0),
+                tokenAdminRegistryAddress: address(0)
+            })
+        );
+        arbitrumNetworkDetails = ccipLocalSimulatorFork.getNetworkDetails(block.chainid);
+    }
+
+    function _deploySource() internal {
+        vm.selectFork(forkMainnet);
+
+        senderTransport = new TestCCIPSenderTransport(mainnetNetworkDetails.routerAddress, address(this));
         stateSource = new TestCCIPStateSource();
         stateSource.setConvertToAssetsRate(2e18);
         stateSource.setAsset(ASSET, TestCCIPStateSource.AssetParams({index: 7, active: true, decimals: 18}));
 
         TestCCIPSenderTransport.DestinationConfig memory destinationConfig = TestCCIPSenderTransport.DestinationConfig({
-            chainSelector: arbitrumSepoliaNetworkDetails.chainSelector,
+            chainSelector: arbitrumNetworkDetails.chainSelector,
             receiver: address(0),
             extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 500_000})),
             enabled: true
@@ -152,21 +192,21 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
     }
 
     function _deployDestination() internal {
-        vm.selectFork(forkArbitrumSepolia);
+        vm.selectFork(forkArbitrum);
 
         StateStore storeImpl = new StateStore();
         bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         destinationStateStore = StateStore(address(new ERC1967Proxy(address(storeImpl), storeInit)));
 
         receiverTransport = new TestCCIPReceiverTransport(
-            arbitrumSepoliaNetworkDetails.routerAddress, address(this), address(destinationStateStore)
+            arbitrumNetworkDetails.routerAddress, address(this), address(destinationStateStore)
         );
         destinationStateStore.grantRole(destinationStateStore.WRITER_ROLE(), address(receiverTransport));
-        receiverTransport.setTrustedSource(sepoliaNetworkDetails.chainSelector, address(senderTransport));
+        receiverTransport.setTrustedSource(mainnetNetworkDetails.chainSelector, address(senderTransport));
 
-        vm.selectFork(forkSepolia);
+        vm.selectFork(forkMainnet);
         TestCCIPSenderTransport.DestinationConfig memory destinationConfig = TestCCIPSenderTransport.DestinationConfig({
-            chainSelector: arbitrumSepoliaNetworkDetails.chainSelector,
+            chainSelector: arbitrumNetworkDetails.chainSelector,
             receiver: address(receiverTransport),
             extraArgs: Client._argsToBytes(Client.EVMExtraArgsV1({gasLimit: 500_000})),
             enabled: true
@@ -175,7 +215,7 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
     }
 
     function _deployRateAdapter(address stateStore_, bytes32 key) internal returns (RateAdapterUpgradeable) {
-        vm.selectFork(forkArbitrumSepolia);
+        vm.selectFork(forkArbitrum);
 
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
