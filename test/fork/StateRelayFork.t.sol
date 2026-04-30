@@ -28,7 +28,6 @@ interface IVault {
 
 /// @dev Canonical ynETHx on Ethereum L1 + shared calldata for `convertToAssets(1e18)`.
 abstract contract StateRelayForkConstants {
-    address internal constant ADMIN = address(0xA11CE);
     address internal constant YNETHX_MAINNET = 0x657d9ABA1DBb59e53f9F3eCAA878447dCfC96dCb;
     address internal constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
@@ -53,7 +52,7 @@ abstract contract StateRelayForkAdapterHelpers is StateRelayForkConstants {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (ADMIN, stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew)
+            (address(this), stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew)
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         return RateAdapterUpgradeable(address(adapterProxy));
@@ -86,27 +85,26 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         setUpEndpoints(2, LibraryType.UltraLightNode);
 
         LayerZeroSenderTransport transportImpl = new LayerZeroSenderTransport(address(endpoints[SRC_EID]));
-        bytes memory transportInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (ADMIN));
+        bytes memory transportInitData = abi.encodeCall(LayerZeroSenderTransport.initialize, (address(this)));
         ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInitData);
         transport = LayerZeroSenderTransport(address(transportProxy));
 
         StateSender impl = new StateSender();
         bytes memory initData = abi.encodeCall(
-            StateSender.initialize, (ADMIN, address(transport), ynEthx_, CONVERT_TO_ASSETS_CALLDATA, 1)
+            StateSender.initialize, (address(this), address(transport), ynEthx_, CONVERT_TO_ASSETS_CALLDATA, 1)
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         stateSender = StateSender(address(proxy));
-        vm.startPrank(ADMIN);
         transport.grantRole(transport.SENDER_ROLE(), address(stateSender));
 
         StateStore storeImpl = new StateStore();
-        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (ADMIN, new address[](0)));
+        bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
         ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
         destinationStateStore = StateStore(address(storeProxy));
 
         LayerZeroReceiverTransport receiverImpl = new LayerZeroReceiverTransport(address(endpoints[DST_EID]));
         bytes memory receiverInit =
-            abi.encodeCall(LayerZeroReceiverTransport.initialize, (ADMIN, address(destinationStateStore)));
+            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(destinationStateStore)));
         ERC1967Proxy receiverProxy = new ERC1967Proxy(address(receiverImpl), receiverInit);
         receiverTransport = LayerZeroReceiverTransport(address(receiverProxy));
         destinationStateStore.grantRole(destinationStateStore.WRITER_ROLE(), address(receiverTransport));
@@ -123,7 +121,6 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         uint256[] memory destinationIds = new uint256[](1);
         destinationIds[0] = DST_CHAIN_ID;
         transport.setDestination(destinationConfigs, destinationIds);
-        vm.stopPrank();
     }
 
     function toAddressArray(address a, address b) internal pure returns (address[] memory arr) {
@@ -168,7 +165,6 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         assertTrue(expectedEntry.active);
         assertEq(expectedEntry.decimals, 18);
 
-        vm.prank(ADMIN);
         stateSender.setCallData(GET_WETH_ASSET_CALLDATA);
 
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
@@ -260,18 +256,17 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
         StateReceiverHarness receiver;
         {
             StateStore storeImpl = new StateStore();
-            bytes memory storeInit = abi.encodeCall(StateStore.initialize, (ADMIN, new address[](0)));
+            bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
             ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
             stateStore = StateStore(address(storeProxy));
 
             StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
             bytes memory recvInit =
-                abi.encodeCall(LayerZeroReceiverTransport.initialize, (ADMIN, address(stateStore)));
+                abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
             ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
             receiver = StateReceiverHarness(address(recvProxy));
         }
 
-        vm.prank(ADMIN);
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
 
         bytes memory message = abi.encode(uint256(1), key, stateData, srcTs);
