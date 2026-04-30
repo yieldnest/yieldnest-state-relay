@@ -236,6 +236,51 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
     }
 
     /// @return stateStore Receiver-side store after delivery; `key`; decoded uint256 rate; Arb `block.timestamp` right after write.
+    function _readMainnetAndDeliverToArbitrumForCalldata(address target, bytes memory callData)
+        internal
+        returns (StateStore stateStore, bytes32 key, bytes memory data, uint256 deliveredAt)
+    {
+        vm.selectFork(forkMainnet);
+
+        (bool ok, bytes memory stateData) = target.staticcall(callData);
+        require(ok, "mainnet: convertToAssets failed");
+
+        uint64 srcTs = uint64(block.timestamp);
+        key = KeyDerivation.deriveKey(1, target, callData);
+
+        vm.selectFork(forkArb);
+
+        TestHelperOz5.setUp();
+        setUpEndpoints(1, LibraryType.UltraLightNode);
+
+        StateReceiverHarness receiver;
+        {
+            StateStore storeImpl = new StateStore();
+            bytes memory storeInit = abi.encodeCall(StateStore.initialize, (address(this), new address[](0)));
+            ERC1967Proxy storeProxy = new ERC1967Proxy(address(storeImpl), storeInit);
+            stateStore = StateStore(address(storeProxy));
+
+            StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
+            bytes memory recvInit =
+                abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
+            ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
+            receiver = StateReceiverHarness(address(recvProxy));
+        }
+
+        stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
+
+        bytes memory message = abi.encode(uint256(1), key, stateData, srcTs);
+        receiver.receivePayload(message);
+
+        deliveredAt = block.timestamp;
+
+        bytes memory stored = stateStore.get(key).value;
+        assertEq(stored, stateData);
+        return (stateStore, key, stored, deliveredAt);
+    }
+
+
+    /// @return stateStore Receiver-side store after delivery; `key`; decoded uint256 rate; Arb `block.timestamp` right after write.
     function _readMainnetAndDeliverToArbitrum()
         internal
         returns (StateStore stateStore, bytes32 key, uint256 expectedRate, uint256 deliveredAt)
