@@ -121,6 +121,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         require(ok, "fork: convertToAssets staticcall failed");
         uint256 expectedAssets = abi.decode(ret, (uint256));
 
+        assertTrue(expectedAssets > 1e18, "expectedAssets should be above 1e18");
+        assertTrue(expectedAssets < 2e18, "expectedAssets should be below 2e18");
+   
+
         StateSender.SendStateQuote memory quoteData = stateSender.quoteSendState(DST_CHAIN_ID);
         assertTrue(quoteData.transportQuote.feeAmount > 0, "expected non-zero native fee");
 
