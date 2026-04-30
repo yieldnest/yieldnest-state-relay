@@ -54,6 +54,7 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
     error StateStore_OwnerCannotBeZero();
     error StateStore_NotWriter();
     error StateStore_EntryNotFound(bytes32 key);
+    error StateStore_HistoryIndexOutOfBounds(bytes32 key, uint256 reverseIndex, uint256 length);
     error StateStore_UnsupportedVersion(uint256 version);
 
     /// @custom:oz-upgrades-unsafe-allow constructor
@@ -230,6 +231,9 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
     function _get(bytes32 key, uint256 reverseIndex) internal view returns (Entry memory) {
         Entry[] storage entries = _getStateStoreStorage().entries[key];
         if (entries.length == 0) revert StateStore_EntryNotFound(key);
+        if (reverseIndex >= entries.length) {
+            revert StateStore_HistoryIndexOutOfBounds(key, reverseIndex, entries.length);
+        }
         return entries[entries.length - 1 - reverseIndex];
     }
 

@@ -73,6 +73,22 @@ contract StateStoreTest is Test {
         stateStore.write(KEY, StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 2, srcTimestamp: 1}));
     }
 
+    function test_get_missingEntry_reverts() public {
+        vm.expectRevert(abi.encodeWithSelector(StateStore.StateStore_EntryNotFound.selector, KEY));
+        stateStore.get(KEY);
+    }
+
+    function test_get_historyIndexOutOfBounds_reverts() public {
+        uint64 ts = uint64(block.timestamp);
+        stateStore.write(KEY, _update(1e18, ts));
+        stateStore.write(KEY, _update(2e18, ts + 1));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(StateStore.StateStore_HistoryIndexOutOfBounds.selector, KEY, uint256(2), uint256(2))
+        );
+        stateStore.get(KEY, 2);
+    }
+
     function test_write_whenPaused_reverts() public {
         stateStore.pause();
 
