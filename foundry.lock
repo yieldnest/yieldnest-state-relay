@@ -1,15 +1,21 @@
 {
-  "lib/LayerZero-v2": {
-    "rev": "9c741e7f9790639537b1710a203bcdfd73b0b9ac"
-  },
   "lib/devtools": {
     "rev": "128b697838f4b0fd53ae748093fd66cc409ae5c4"
   },
-  "lib/forge-std": {
+  "lib/solidity-bytes-utils": {
+    "rev": "fc502455bb2a7e26a743378df042612dd50d1eb9"
+  },
+  "lib/LayerZero-v1": {
+    "rev": "a1fb11a3b9c0ac449291816e71eacede4e36613e"
+  },
+  "lib/chainlink-local": {
     "tag": {
-      "name": "v1.15.0",
-      "rev": "0844d7e1fc5e60d77b68e469bff60265f236c398"
+      "name": "v0.2.7",
+      "rev": "a3ace4e17336e84c4d1261f2da45d5e8963af714"
     }
+  },
+  "lib/LayerZero-v2": {
+    "rev": "9c741e7f9790639537b1710a203bcdfd73b0b9ac"
   },
   "lib/openzeppelin-contracts": {
     "tag": {
@@ -23,7 +29,10 @@
       "rev": "7bf4727aacdbfaa0f36cbd664654d0c9e1dc52bf"
     }
   },
-  "lib/solidity-bytes-utils": {
-    "rev": "fc502455bb2a7e26a743378df042612dd50d1eb9"
+  "lib/forge-std": {
+    "tag": {
+      "name": "v1.15.0",
+      "rev": "0844d7e1fc5e60d77b68e469bff60265f236c398"
+    }
   }
 }

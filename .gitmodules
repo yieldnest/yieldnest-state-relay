@@ -19,3 +19,6 @@
 [submodule "lib/LayerZero-v1"]
 	path = lib/LayerZero-v1
 	url = https://github.com/LayerZero-Labs/LayerZero-v1
+[submodule "lib/chainlink-local"]
+	path = lib/chainlink-local
+	url = https://github.com/smartcontractkit/chainlink-local
