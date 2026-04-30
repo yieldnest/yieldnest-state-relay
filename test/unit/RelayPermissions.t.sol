@@ -91,9 +91,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
     function test_permissions_stateSender_pause_requiresDefaultAdminRole() public {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateSender.PAUSER_ROLE()
-            )
+            abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateSender.PAUSER_ROLE())
         );
         stateSender.pause();
         vm.stopPrank();
@@ -140,9 +138,7 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
     function test_permissions_stateStore_pause_requiresDefaultAdminRole() public {
         vm.startPrank(ATTACKER);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.PAUSER_ROLE()
-            )
+            abi.encodeWithSelector(ACCESS_CONTROL_UNAUTHORIZED_ACCOUNT_SELECTOR, ATTACKER, stateStore.PAUSER_ROLE())
         );
         stateStore.pause();
         vm.stopPrank();

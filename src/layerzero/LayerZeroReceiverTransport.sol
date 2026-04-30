@@ -69,8 +69,8 @@ contract LayerZeroReceiverTransport is OAppUpgradeable, AccessControlUpgradeable
     function _lzReceive(Origin calldata, bytes32, bytes calldata _message, address, bytes calldata)
         internal
         virtual
-        whenNotPaused
         override
+        whenNotPaused
     {
         StateStore.WriteResult memory result = _getLayerZeroReceiverTransportStorage().stateStore.write(_message);
         if (result.written) {
