@@ -102,6 +102,7 @@ contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, 
         onlyRole(SENDER_ROLE)
     {
         DestinationConfig storage destination = _getDestinationOrRevert(destinationId);
+        // _payInLzToken = false. The LayerZeroTransport only supports native payment for now.
         MessagingFee memory fee = _quote(destination.lzEid, message, destination.options, false);
 
         // since we're requesting pay in native, the lzTokenFee value should be 0
