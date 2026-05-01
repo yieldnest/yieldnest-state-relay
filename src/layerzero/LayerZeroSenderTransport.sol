@@ -10,6 +10,7 @@ import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
 /**
  * @title LayerZeroSenderTransport
  * @notice LayerZero-specific send adapter that maps application destination IDs onto LayerZero route configuration.
+ * @notice NOTE: By convention, for EVM chains, destinationId is the chainId of the destination chain.  
  */
 contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, IRelayTransport {
     string public constant VERSION = "0.1.0";
@@ -108,6 +109,7 @@ contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, 
         // since we're requesting pay in native, the lzTokenFee value should be 0
         if (fee.lzTokenFee != 0) revert LayerZeroSenderTransport_LzTokenPaymentNotSupported();
 
+        // NOTE: OAppUpgradeable reverts if msg.value is not exact. This is a weaker check than the one in the _lzSend() function.
         if (msg.value < fee.nativeFee) revert LayerZeroSenderTransport_InsufficientNativeFee();
 
         _lzSend(destination.lzEid, message, destination.options, fee, refundTo);
