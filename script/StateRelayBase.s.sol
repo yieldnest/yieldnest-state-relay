@@ -239,11 +239,25 @@ contract StateRelayBase is BaseData {
         }
 
         StateStore store = StateStore(stateStoreOf[dstChainId]);
+        if (!store.hasRole(store.PAUSER_ROLE(), relayOwner)) {
+            _startBroadcast();
+            store.grantRole(store.PAUSER_ROLE(), relayOwner);
+            vm.stopBroadcast();
+            console.log("Granted StateStore PAUSER_ROLE to relay owner");
+        }
         if (!store.isWriter(stateReceiverOf[dstChainId])) {
             _startBroadcast();
             store.grantRole(store.WRITER_ROLE(), stateReceiverOf[dstChainId]);
             vm.stopBroadcast();
             console.log("Granted StateReceiver writer on StateStore");
+        }
+
+        LayerZeroReceiverTransport receiver = LayerZeroReceiverTransport(stateReceiverOf[dstChainId]);
+        if (!receiver.hasRole(receiver.PAUSER_ROLE(), relayOwner)) {
+            _startBroadcast();
+            receiver.grantRole(receiver.PAUSER_ROLE(), relayOwner);
+            vm.stopBroadcast();
+            console.log("Granted StateReceiver PAUSER_ROLE to relay owner");
         }
     }
 
@@ -268,6 +282,7 @@ contract StateRelayBase is BaseData {
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
         LayerZeroSenderTransport(address(transportProxy))
             .grantRole(LayerZeroSenderTransport(address(transportProxy)).SENDER_ROLE(), address(proxy));
+        StateSender(address(proxy)).grantRole(StateSender(address(proxy)).PAUSER_ROLE(), relayOwner);
         LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
             new LayerZeroSenderTransport.DestinationConfig[](1);
         destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
