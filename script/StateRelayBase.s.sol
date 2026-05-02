@@ -321,12 +321,10 @@ contract StateRelayBase is BaseData {
         }
 
         StateStore store = StateStore(stateStoreOf[dstChainId]);
-        if (!store.hasRole(store.PAUSER_ROLE(), relayDeployer)) {
-            _startBroadcast();
-            store.grantRole(store.PAUSER_ROLE(), relayDeployer);
-            vm.stopBroadcast();
-            console.log("Granted StateStore PAUSER_ROLE to relay deployer");
-        }
+        _startBroadcast();
+        store.grantRole(store.PAUSER_ROLE(), getData(dstChainId).OFT_OWNER);
+        vm.stopBroadcast();
+        console.log("Granted StateStore PAUSER_ROLE to OFT_OWNER");
         if (!store.isWriter(stateReceiverOf[dstChainId])) {
             _startBroadcast();
             store.grantRole(store.WRITER_ROLE(), stateReceiverOf[dstChainId]);
@@ -335,12 +333,10 @@ contract StateRelayBase is BaseData {
         }
 
         LayerZeroReceiverTransport receiver = LayerZeroReceiverTransport(stateReceiverOf[dstChainId]);
-        if (!receiver.hasRole(receiver.PAUSER_ROLE(), relayDeployer)) {
-            _startBroadcast();
-            receiver.grantRole(receiver.PAUSER_ROLE(), relayDeployer);
-            vm.stopBroadcast();
-            console.log("Granted StateReceiver PAUSER_ROLE to relay deployer");
-        }
+        _startBroadcast();
+        receiver.grantRole(receiver.PAUSER_ROLE(), getData(dstChainId).OFT_OWNER);
+        vm.stopBroadcast();
+        console.log("Granted StateReceiver PAUSER_ROLE to OFT_OWNER");
     }
 
     function _deploySender(string memory label, SenderInput memory s, address lzEndpoint) internal {
@@ -371,7 +367,7 @@ contract StateRelayBase is BaseData {
         TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(impl), senderTimelock, init);
         LayerZeroSenderTransport(address(transportProxy))
             .grantRole(LayerZeroSenderTransport(address(transportProxy)).SENDER_ROLE(), address(proxy));
-        StateSender(address(proxy)).grantRole(StateSender(address(proxy)).PAUSER_ROLE(), relayDeployer);
+        StateSender(address(proxy)).grantRole(StateSender(address(proxy)).PAUSER_ROLE(), getData(block.chainid).OFT_OWNER);
         LayerZeroSenderTransport.DestinationConfig[] memory destinationConfigs =
             new LayerZeroSenderTransport.DestinationConfig[](1);
         destinationConfigs[0] = LayerZeroSenderTransport.DestinationConfig({
