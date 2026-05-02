@@ -73,6 +73,7 @@ contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, 
             $.destinations[destinationId] = DestinationConfig({
                 lzEid: config.lzEid, peer: config.peer, options: config.options, enabled: config.enabled
             });
+            // This call has onlyOwner access control.  Caller needs to have both CONFIG_MANAGER_ROLE and owner roles.
             setPeer(config.lzEid, config.peer);
             emit DestinationSet(destinationId, config.lzEid, config.peer, config.options, config.enabled);
         }
