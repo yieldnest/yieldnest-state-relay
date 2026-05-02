@@ -16,6 +16,7 @@ contract BaseData is Script {
         address LZ_BLOCK_SEND_LIB;
         address LZ_DVN;
         address NETHERMIND_DVN;
+        address CANARY_DVN;
         address LZ_EXECUTOR;
     }
 
@@ -102,8 +103,11 @@ contract BaseData is Script {
     });
 
     function setUp() public virtual {
-        // NOTE: All the LZ Endpoints and EIDs are picked up from their docs
-        // at https://docs.layerzero.network/v2/developers/evm/technical-reference/deployed-contracts
+        // NOTE: LayerZero deployment values are sourced from the official docs:
+        // https://docs.layerzero.network/v2/deployments/chains/<chain>
+        // Canary DVNs are cross-checked against LayerZero Labs' generated address book because the docs tables are
+        // client-rendered:
+        // https://github.com/LayerZero-Labs/lz-address-book
 
         // mainnets
         __chainIdToData[__chainIds.mainnet] = Data({
@@ -116,6 +120,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x589dEDbD617e0CBcB916A9223F4d1300c294236b,
             NETHERMIND_DVN: 0xa59BA433ac34D2927232918Ef5B2eaAfcF130BA5,
+            CANARY_DVN: 0xa4fE5A5B9A846458a70Cd0748228aED3bF65c2cd,
             LZ_EXECUTOR: 0x173272739Bd7Aa6e4e214714048a9fE699453059,
             LZ_EID: 30101
         });
@@ -129,6 +134,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x9e059a54699a285714207b43B055483E78FAac25,
             NETHERMIND_DVN: 0xcd37CA043f8479064e10635020c65FfC005d36f6,
+            CANARY_DVN: 0x554833698Ae0FB22ECC90B01222903fD62CA4B47,
             LZ_EXECUTOR: 0x2CCA08ae69E0C44b18a57Ab2A87644234dAebaE4,
             LZ_EID: 30184
         });
@@ -142,6 +148,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x6A02D83e8d433304bba74EF1c427913958187142,
             NETHERMIND_DVN: 0xa7b5189bcA84Cd304D8553977c7C614329750d99,
+            CANARY_DVN: 0x5b6735c66d97479cCD18294fc96B3084EcB2fa3f,
             LZ_EXECUTOR: 0x2D2ea0697bdbede3F01553D2Ae4B8d0c486B666e,
             LZ_EID: 30111
         });
@@ -155,6 +162,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x2f55C492897526677C5B68fb199ea31E2c126416,
             NETHERMIND_DVN: 0xa7b5189bcA84Cd304D8553977c7C614329750d99,
+            CANARY_DVN: 0xf2E380c90e6c09721297526dbC74f870e114dfCb,
             LZ_EXECUTOR: 0x31CAe3B7fB82d847621859fb1585353c5720660D,
             LZ_EID: 30110
         });
@@ -168,6 +176,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xcCE466a522984415bC91338c232d98869193D46e,
             NETHERMIND_DVN: 0xa7b5189bcA84Cd304D8553977c7C614329750d99,
+            CANARY_DVN: 0x6398E91001Cc1682bBA103E6B2489Fa5675a5a64,
             LZ_EXECUTOR: 0x41Bdb4aa4A63a5b2Efc531858d3118392B1A1C3d,
             LZ_EID: 30255
         });
@@ -181,6 +190,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xA09dB5142654e3eB5Cf547D66833FAe7097B21C3,
             NETHERMIND_DVN: 0x247624e2143504730aeC22912ed41F092498bEf2,
+            CANARY_DVN: 0xDF44a1594d3D516f7CDFb4DC275a79a5F6e3Db1d,
             LZ_EXECUTOR: 0x8DD9197E51dC6082853aD71D35912C53339777A7,
             LZ_EID: 30217
         });
@@ -194,6 +204,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xc097ab8CD7b053326DFe9fB3E3a31a0CCe3B526f,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: 0xa9Ff468ad000A4D5729826459197a0dB843F433E,
             LZ_EXECUTOR: 0xa20DB4Ffe74A31D17fc24BD32a7DD7555441058e,
             LZ_EID: 30290
         });
@@ -207,6 +218,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xbe0d08a85EeBFCC6eDA0A843521f7CBB1180D2e2,
             NETHERMIND_DVN: 0x446755349101cB20c582C224462c3912d3584dCE,
+            CANARY_DVN: 0xDF44a1594d3D516f7CDFb4DC275a79a5F6e3Db1d,
             LZ_EXECUTOR: 0x581b26F362AD383f7B51eF8A165Efa13DDe398a4,
             LZ_EID: 30214
         });
@@ -220,6 +232,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xE60A3959Ca23a92BF5aAf992EF837cA7F828628a,
             NETHERMIND_DVN: 0x31F748a368a893Bdb5aBB67ec95F232507601A73,
+            CANARY_DVN: 0xE5BFfd46776251b70895517D4AB635a640dA61E9,
             LZ_EXECUTOR: 0x2957eBc0D2931270d4a539696514b047756b3056,
             LZ_EID: 30112
         });
@@ -233,6 +246,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x28B6140ead70cb2Fb669705b3598ffB4BEaA060b,
             NETHERMIND_DVN: 0xB19A9370D404308040A9760678c8Ca28aFfbbb76,
+            CANARY_DVN: 0xa2447e5B58D357c49Bf74B50B14421e6A100e525,
             LZ_EXECUTOR: 0x4Fc3f4A38Acd6E4cC0ccBc04B3Dd1CCAeFd7F3Cd,
             LZ_EID: 30181
         });
@@ -246,6 +260,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xc097ab8CD7b053326DFe9fB3E3a31a0CCe3B526f,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: 0x6398E91001Cc1682bBA103E6B2489Fa5675a5a64,
             LZ_EXECUTOR: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             LZ_EID: 30243
         });
@@ -259,6 +274,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x129Ee430Cb2Ff2708CCADDBDb408a88Fe4FFd480,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: 0xDA63525a0Fc42Bcc2cAD1dD28708d5ed11849347,
             LZ_EXECUTOR: 0x0408804C5dcD9796F22558464E6fE5bDdF16A7c7,
             LZ_EID: 30183
         });
@@ -272,6 +288,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x282b3386571f7f794450d5789911a9804FA346b4,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: 0x06e8042729CeF3aE6D6DB5350f48F9D736C3675d,
             LZ_EXECUTOR: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             LZ_EID: 30362
         });
@@ -285,6 +302,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0xfD6865c841c2d64565562fCc7e05e619A30615f0,
             NETHERMIND_DVN: 0x31F748a368a893Bdb5aBB67ec95F232507601A73,
+            CANARY_DVN: 0xfA9bA83C102283958B997Adc8B44ED3A3CdB5dDa,
             LZ_EXECUTOR: 0x3ebD570ed38B1b3b4BC886999fcF507e9D584859,
             LZ_EID: 30102
         });
@@ -298,6 +316,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0xC1cE56B2099cA68720592583C7984CAb4B6d7E7a,
             LZ_DVN: 0x282b3386571f7f794450d5789911a9804FA346b4,
             NETHERMIND_DVN: 0x07C05EaB7716AcB6f83ebF6268F8EECDA8892Ba1,
+            CANARY_DVN: 0x396dC0A78F789586E2982fCCD830C5954C193F3c,
             LZ_EXECUTOR: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             LZ_EID: 30329
         });
@@ -311,6 +330,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x796862C4849662BfC30FE7559780923D519d3192,
             LZ_DVN: 0x174F2bA26f8ADeAfA82663bcf908288d5DbCa649,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: 0x1E4CE74ccf5498B19900649D9196e64BAb592451,
             LZ_EXECUTOR: 0xFEbCF17b11376C724AB5a5229803C6e838b6eAe5,
             LZ_EID: 30339
         });
@@ -325,6 +345,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0xf540D892BC671f08E0B1c5B61185c53c2211e8f7,
             LZ_DVN: 0x5727E81A40015961145330D91cC27b5E189fF3e1,
             NETHERMIND_DVN: 0xDd7B5E1dB4AaFd5C8EC3b764eFB8ed265Aa5445B,
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x6A02D83e8d433304bba74EF1c427913958187142,
             LZ_EID: 30369
         });
@@ -339,6 +360,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x9C061c9A4782294eeF65ef28Cb88233A987F4bdD,
             NETHERMIND_DVN: 0x28af4dADbc5066e994986E8bb105240023dC44B6,
+            CANARY_DVN: 0x047d9DBe4fC6B5c916F37237F547f9F42809935a,
             LZ_EXECUTOR: 0xcCE466a522984415bC91338c232d98869193D46e,
             LZ_EID: 30274
         });
@@ -353,6 +375,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0xC1cE56B2099cA68720592583C7984CAb4B6d7E7a,
             LZ_DVN: 0x282b3386571f7f794450d5789911a9804FA346b4,
             NETHERMIND_DVN: 0xa51cE237FaFA3052D5d3308Df38A024724Bb1274,
+            CANARY_DVN: 0x2465eE263149A18d61c9224244c61a5871dc0473,
             LZ_EXECUTOR: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             LZ_EID: 30383
         });
@@ -367,6 +390,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x9e611dB91aDe3312534064ae6Ae700F5B531844c,
             LZ_DVN: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             NETHERMIND_DVN: 0x882a1EE8891c7d22310dedf032eF9653785532B8,
+            CANARY_DVN: 0x395B14700812cccC38b8e64F0a06ce2045FE9bA3,
             LZ_EXECUTOR: 0x41Bdb4aa4A63a5b2Efc531858d3118392B1A1C3d,
             LZ_EID: 30370
         });
@@ -381,6 +405,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x962F502A63F5FBeB44DC9ab932122648E8352959,
             NETHERMIND_DVN: 0xa59BA433ac34D2927232918Ef5B2eaAfcF130BA5,
+            CANARY_DVN: 0xcC49E6fca014c77E1Eb604351cc1E08C84511760,
             LZ_EXECUTOR: 0x90E595783E43eb89fF07f63d27B8430e6B44bD9c,
             LZ_EID: 30106
         });
@@ -395,6 +420,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x1ccBf0db9C192d969de57E25B3fF09A25bb1D862,
             LZ_DVN: 0x23DE2FE932d9043291f870324B74F820e11dc81A,
             NETHERMIND_DVN: 0x31F748a368a893Bdb5aBB67ec95F232507601A73,
+            CANARY_DVN: 0x13feb7234Ff60A97af04477d6421415766753Ba3,
             LZ_EXECUTOR: 0xCd3F213AD101472e1713C72B1697E727C803885b,
             LZ_EID: 30109
         });
@@ -409,6 +435,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x26463a4aF811c256f669524Ec2dC1ba7e7a83C37,
             LZ_DVN: 0x6788f52439ACA6BFF597d3eeC2DC9a44B8FEE842,
             NETHERMIND_DVN: 0x1294E3347ec64Fd63e1d0594Dc1294247cd237C7,
+            CANARY_DVN: 0x307d81ef09c72730f57667bF1e9b62DB4904053f,
             LZ_EXECUTOR: 0xa20DB4Ffe74A31D17fc24BD32a7DD7555441058e,
             LZ_EID: 30365
         });
@@ -423,6 +450,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0xC1cE56B2099cA68720592583C7984CAb4B6d7E7a,
             LZ_DVN: 0x282b3386571f7f794450d5789911a9804FA346b4,
             NETHERMIND_DVN: 0xaCDe1f22EEAb249d3ca6Ba8805C8fEe9f52a16e7,
+            CANARY_DVN: 0x53fF818a1c492e667E2cD0b5AFe0FC82c66d33c7,
             LZ_EXECUTOR: 0x4208D6E27538189bB48E603D6123A94b8Abe0A0b,
             LZ_EID: 30375
         });
@@ -438,6 +466,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x0C77d8d771aB35E2E184E7cE127f19CEd31FF8C0,
             LZ_DVN: 0x3E43f8ff0175580f7644DA043071c289DDf98118,
             NETHERMIND_DVN: address(0),
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0xBc0C24E6f24eC2F1fd7E859B8322A1277F80aaD5,
             LZ_EID: 40217
         });
@@ -451,6 +480,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x0C77d8d771aB35E2E184E7cE127f19CEd31FF8C0,
             LZ_DVN: 0x8eebf8b423B73bFCa51a1Db4B7354AA0bFCA9193,
             NETHERMIND_DVN: 0x68802e01D6321D5159208478f297d7007A7516Ed,
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x718B92b5CB0a5552039B593faF724D182A881eDA,
             LZ_EID: 40161
         });
@@ -464,6 +494,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: address(0),
             LZ_DVN: 0xF49d162484290EAeAd7bb8C2c7E3a6f8f52e32d6,
             NETHERMIND_DVN: 0x14CcB1a6ebb0b6F669fcE087a2DbF664A1F57251,
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x55c175DD5b039331dB251424538169D8495C18d1,
             LZ_EID: 40255
         });
@@ -477,6 +508,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: address(0),
             LZ_DVN: 0xF49d162484290EAeAd7bb8C2c7E3a6f8f52e32d6,
             NETHERMIND_DVN: address(0),
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x701f3927871EfcEa1235dB722f9E608aE120d243,
             LZ_EID: 40322
         });
@@ -491,6 +523,7 @@ contract BaseData is Script {
             LZ_DVN: 0xC1868e054425D378095A003EcbA3823a5D0135C9,
             NETHERMIND_DVN: 0xF49d162484290EAeAd7bb8C2c7E3a6f8f52e32d6, //no listed nethermind testnet dvn, using
             // LZ's dvn
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x701f3927871EfcEa1235dB722f9E608aE120d243,
             LZ_EID: 40338
         });
@@ -504,6 +537,7 @@ contract BaseData is Script {
             LZ_BLOCK_SEND_LIB: 0x0C77d8d771aB35E2E184E7cE127f19CEd31FF8C0,
             LZ_DVN: 0x0eE552262f7B562eFcED6DD4A7e2878AB897d405,
             NETHERMIND_DVN: 0x6334290B7b4a365F3c0E79c85B1b42F078db78E4,
+            CANARY_DVN: address(0),
             LZ_EXECUTOR: 0x31894b190a8bAbd9A067Ce59fde0BfCFD2B18470,
             LZ_EID: 40102
         });
@@ -639,6 +673,7 @@ contract BaseData is Script {
         require(_data.LZ_DVN != address(0), "BaseData: LZ DVN not set");
         if (!isTestnetChainId(chainId)) {
             require(_data.NETHERMIND_DVN != address(0), "BaseData: NETHERMIND DVN not set");
+            require(_data.CANARY_DVN != address(0), "BaseData: CANARY DVN not set");
         }
         require(_data.LZ_EXECUTOR != address(0), "BaseData: LZ EXECUTOR not set");
         require(_data.LZ_EID != 0, "BaseData: LZ EID not set");

@@ -228,20 +228,21 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         Data storage data = getData(block.chainid);
         bool isTestnet = isTestnetChainId(block.chainid);
 
-        address[] memory requiredDVNs = new address[](isTestnet ? 1 : 2);
+        address[] memory requiredDVNs = new address[](isTestnet ? 1 : 3);
         uint64 confirmations = isTestnet ? 8 : 32;
-        uint8 requiredDVNCount = isTestnet ? 1 : 2;
+        uint8 requiredDVNCount = isTestnet ? 1 : 3;
 
         if (isTestnet) {
             requiredDVNs[0] = data.LZ_DVN;
         } else {
-            if (data.LZ_DVN > data.NETHERMIND_DVN) {
-                requiredDVNs[0] = data.NETHERMIND_DVN;
-                requiredDVNs[1] = data.LZ_DVN;
-            } else {
-                requiredDVNs[0] = data.LZ_DVN;
-                requiredDVNs[1] = data.NETHERMIND_DVN;
-            }
+            requiredDVNs[0] = data.LZ_DVN;
+            requiredDVNs[1] = data.NETHERMIND_DVN;
+            requiredDVNs[2] = data.CANARY_DVN;
+            // LayerZero ULN requires requiredDVNs/optionalDVNs to be sorted ascending; unsorted or duplicate
+            // entries revert with LZ_ULN_Unsorted. See:
+            // https://docs.layerzero.network/v2/concepts/verification-execution-services
+            // and UlnBase._assertNoDuplicates in the LayerZero V2 EVM MessageLib.
+            _sortAddresses(requiredDVNs);
         }
 
         _ulnConfig = UlnConfig({
@@ -252,6 +253,19 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             requiredDVNs: requiredDVNs,
             optionalDVNs: new address[](0)
         });
+    }
+
+    function _sortAddresses(address[] memory addrs) internal pure {
+        uint256 len = addrs.length;
+        for (uint256 i = 1; i < len; i++) {
+            address key = addrs[i];
+            uint256 j = i;
+            while (j > 0 && addrs[j - 1] > key) {
+                addrs[j] = addrs[j - 1];
+                j--;
+            }
+            addrs[j] = key;
+        }
     }
 
     function _configureDVNs(address oapp, uint256[] memory otherChainIds) internal {
