@@ -72,11 +72,18 @@ contract StateRelayBase is BaseData {
         return string.concat(vm.projectRoot(), "/deployments/", relayName, "-", relayVersion, ".json");
     }
 
-    /// @dev `initialize` sets Ownable to `relayOwner`; txs must be signed by the same key or `onlyOwner` reverts (Forge default caller is not `.owner`).
+    /// @dev Uses Foundry's active broadcaster configuration (`--private-key`, `--account`, ledger, etc.).
+    ///      The configured signer does not need to equal `relayOwner`; ownership/admin is assigned via initializer args.
     function _startBroadcast() internal {
-        uint256 pk = vm.envUint("PRIVATE_KEY");
-        require(vm.addr(pk) == relayOwner, "StateRelay: PRIVATE_KEY must match input .owner");
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
+        (, address msgSender,) = vm.readCallers();
+        require(msgSender == relayOwner, "StateRelay: broadcaster must match input .owner");
+    }
+
+    function _broadcastOnce() internal {
+        vm.broadcast();
+        (, address msgSender,) = vm.readCallers();
+        require(msgSender == relayOwner, "StateRelay: broadcaster must match input .owner");
     }
 
     function _pushUniqueChainId(uint256 chainId) private {

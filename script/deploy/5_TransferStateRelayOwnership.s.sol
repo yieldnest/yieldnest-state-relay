@@ -26,25 +26,21 @@ contract TransferStateRelayOwnership is StateRelayBase {
 
         address nextOwner = getData(block.chainid).OFT_OWNER;
         uint256 cid = block.chainid;
-        uint256 pk = vm.envUint("PRIVATE_KEY");
-        require(vm.addr(pk) == relayOwner, "StateRelay: PRIVATE_KEY must match input .owner");
 
         address st = stateStoreOf[cid];
         if (st != address(0)) {
-            _transferStateStoreRoles(StateStore(st), nextOwner, pk);
-            _transferProxyAdminOwnership(stateStoreProxyAdminOf[cid], "StateStore proxy admin", nextOwner, pk);
+            _transferStateStoreRoles(StateStore(st), nextOwner);
+            _transferProxyAdminOwnership(stateStoreProxyAdminOf[cid], "StateStore proxy admin", nextOwner);
         }
 
         address rc = stateReceiverOf[cid];
         if (rc != address(0)) {
-            _transferStateReceiverRoles(LayerZeroReceiverTransport(rc), nextOwner, pk);
-            _transferProxyAdminOwnership(
-                stateReceiverProxyAdminOf[cid], "StateReceiver proxy admin", nextOwner, pk
-            );
+            _transferStateReceiverRoles(LayerZeroReceiverTransport(rc), nextOwner);
+            _transferProxyAdminOwnership(stateReceiverProxyAdminOf[cid], "StateReceiver proxy admin", nextOwner);
             Ownable o = Ownable(rc);
             if (o.owner() != nextOwner) {
                 if (o.owner() != relayOwner) revert NotOwner();
-                vm.broadcast(pk);
+                _broadcastOnce();
                 o.transferOwnership(nextOwner);
                 console.log("StateReceiver ownership -> OFT_OWNER");
             }
@@ -57,29 +53,26 @@ contract TransferStateRelayOwnership is StateRelayBase {
             if (snd == address(0)) continue;
             bytes32 slot = senderSlot(cid, label);
 
-            _transferStateSenderRoles(StateSender(snd), label, nextOwner, pk);
-            _transferProxyAdminOwnership(
-                stateSenderProxyAdminOf[slot], string.concat("StateSender [", label, "] proxy admin"), nextOwner, pk
-            );
+            _transferStateSenderRoles(StateSender(snd), label, nextOwner);
+            _transferProxyAdminOwnership(stateSenderProxyAdminOf[slot], string.concat("StateSender [", label, "] proxy admin"), nextOwner);
 
             LayerZeroSenderTransport transport = LayerZeroSenderTransport(address(StateSender(snd).transport()));
-            _transferStateSenderTransportRoles(transport, label, nextOwner, pk);
+            _transferStateSenderTransportRoles(transport, label, nextOwner);
             _transferProxyAdminOwnership(
                 stateSenderTransportProxyAdminOf[slot],
                 string.concat("StateSender transport [", label, "] proxy admin"),
-                nextOwner,
-                pk
+                nextOwner
             );
             if (transport.owner() != nextOwner) {
                 if (transport.owner() != relayOwner) revert NotOwner();
-                vm.broadcast(pk);
+                _broadcastOnce();
                 transport.transferOwnership(nextOwner);
                 console.log("StateSender transport [%s] ownership -> OFT_OWNER", label);
             }
         }
     }
 
-    function _transferStateStoreRoles(StateStore store, address nextOwner, uint256 pk) internal {
+    function _transferStateStoreRoles(StateStore store, address nextOwner) internal {
         bool relayAdmin = store.hasRole(store.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !store.hasRole(store.DEFAULT_ADMIN_ROLE(), nextOwner)
             || !store.hasRole(store.VERSION_MANAGER_ROLE(), nextOwner)
@@ -93,7 +86,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
         if (!store.hasRole(store.DEFAULT_ADMIN_ROLE(), nextOwner)) {
             store.grantRole(store.DEFAULT_ADMIN_ROLE(), nextOwner);
         }
@@ -123,7 +116,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         console.log("StateStore roles -> OFT_OWNER");
     }
 
-    function _transferStateReceiverRoles(LayerZeroReceiverTransport receiver, address nextOwner, uint256 pk) internal {
+    function _transferStateReceiverRoles(LayerZeroReceiverTransport receiver, address nextOwner) internal {
         bool relayAdmin = receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), nextOwner)
             || !receiver.hasRole(receiver.PAUSER_ROLE(), nextOwner);
@@ -133,7 +126,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
         if (!receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), nextOwner)) {
             receiver.grantRole(receiver.DEFAULT_ADMIN_ROLE(), nextOwner);
         }
@@ -151,7 +144,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         console.log("StateReceiver roles -> OFT_OWNER");
     }
 
-    function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner, uint256 pk)
+    function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner)
         internal
     {
         bool relayAdmin = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayOwner);
@@ -167,7 +160,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
         if (!sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)) {
             sender.grantRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner);
         }
@@ -197,12 +190,9 @@ contract TransferStateRelayOwnership is StateRelayBase {
         console.log("StateSender [%s] roles -> OFT_OWNER", label);
     }
 
-    function _transferStateSenderTransportRoles(
-        LayerZeroSenderTransport transport,
-        string memory label,
-        address nextOwner,
-        uint256 pk
-    ) internal {
+    function _transferStateSenderTransportRoles(LayerZeroSenderTransport transport, string memory label, address nextOwner)
+        internal
+    {
         bool relayAdmin = transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), relayOwner);
         bool needsGrant = !transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner)
             || !transport.hasRole(transport.CONFIG_MANAGER_ROLE(), nextOwner);
@@ -212,7 +202,7 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
 
-        vm.startBroadcast(pk);
+        vm.startBroadcast();
         if (!transport.hasRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner)) {
             transport.grantRole(transport.DEFAULT_ADMIN_ROLE(), nextOwner);
         }
@@ -230,16 +220,14 @@ contract TransferStateRelayOwnership is StateRelayBase {
         console.log("StateSender transport [%s] roles -> OFT_OWNER", label);
     }
 
-    function _transferProxyAdminOwnership(address proxyAdmin, string memory what, address nextOwner, uint256 pk)
-        internal
-    {
+    function _transferProxyAdminOwnership(address proxyAdmin, string memory what, address nextOwner) internal {
         if (proxyAdmin == address(0)) return;
 
         Ownable admin = Ownable(proxyAdmin);
         if (admin.owner() == nextOwner) return;
         if (admin.owner() != relayOwner) revert NotOwner();
 
-        vm.broadcast(pk);
+        _broadcastOnce();
         admin.transferOwnership(nextOwner);
         console.log("%s -> OFT_OWNER", what);
     }
