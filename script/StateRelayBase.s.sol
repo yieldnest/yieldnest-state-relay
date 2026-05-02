@@ -12,7 +12,8 @@ import {LayerZeroReceiverTransport} from "../src/layerzero/LayerZeroReceiverTran
 import {LayerZeroSenderTransport} from "../src/layerzero/LayerZeroSenderTransport.sol";
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 
-import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {TransparentUpgradeableProxy} from
+    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @notice Shared input, deployment JSON, and deploy steps for state relay scripts.
 /// @dev Call `setUp()` once at the start of each script `run` (BaseData is not idempotent). Then `loadInput`, `loadDeployment`.
@@ -37,8 +38,16 @@ contract StateRelayBase is BaseData {
     mapping(string => SenderInput) internal senderByLabel;
 
     mapping(uint256 => address) internal stateStoreOf;
+    mapping(uint256 => address) internal stateStoreProxyAdminOf;
     mapping(uint256 => address) internal stateReceiverOf;
+    mapping(uint256 => address) internal stateReceiverProxyAdminOf;
     mapping(bytes32 => address) internal stateSenderOf;
+    mapping(bytes32 => address) internal stateSenderProxyAdminOf;
+    mapping(bytes32 => address) internal stateSenderTransportOf;
+    mapping(bytes32 => address) internal stateSenderTransportProxyAdminOf;
+
+    bytes32 internal constant ERC1967_ADMIN_SLOT =
+        0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     function defaultSendOptions() internal pure returns (bytes memory) {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
@@ -150,8 +159,14 @@ contract StateRelayBase is BaseData {
             try vm.parseJsonAddress(json, string.concat(cpre, ".stateStore")) returns (address st) {
                 if (st != address(0)) stateStoreOf[depChainId] = st;
             } catch {}
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdmin")) returns (address pa) {
+                if (pa != address(0)) stateStoreProxyAdminOf[depChainId] = pa;
+            } catch {}
             try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver")) returns (address rc) {
                 if (rc != address(0)) stateReceiverOf[depChainId] = rc;
+            } catch {}
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdmin")) returns (address pa) {
+                if (pa != address(0)) stateReceiverProxyAdminOf[depChainId] = pa;
             } catch {}
         }
 
@@ -160,7 +175,25 @@ contract StateRelayBase is BaseData {
             SenderInput memory s = senderByLabel[label];
             string memory byChain = string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".address");
             try vm.parseJsonAddress(json, byChain) returns (address sAddr) {
-                if (sAddr != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = sAddr;
+                if (sAddr != address(0)) {
+                    bytes32 slot = senderSlot(s.chainId, label);
+                    stateSenderOf[slot] = sAddr;
+                    try vm.parseJsonAddress(json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdmin"))
+                    returns (address pa) {
+                        if (pa != address(0)) stateSenderProxyAdminOf[slot] = pa;
+                    } catch {}
+                    try vm.parseJsonAddress(
+                        json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transport")
+                    ) returns (address ta) {
+                        if (ta != address(0)) stateSenderTransportOf[slot] = ta;
+                    } catch {}
+                    try vm.parseJsonAddress(
+                        json,
+                        string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transportProxyAdmin")
+                    ) returns (address tpa) {
+                        if (tpa != address(0)) stateSenderTransportProxyAdminOf[slot] = tpa;
+                    } catch {}
+                }
             } catch {
                 string memory legacy = string.concat(".senderContracts.", label, ".address");
                 try vm.parseJsonAddress(json, legacy) returns (address sAddr) {
@@ -217,12 +250,17 @@ contract StateRelayBase is BaseData {
             _startBroadcast();
             StateStore impl = new StateStore();
             bytes memory initStore = abi.encodeCall(StateStore.initialize, (relayOwner, new address[](0)));
-            ERC1967Proxy storeProxy = new ERC1967Proxy(address(impl), initStore);
+            TransparentUpgradeableProxy storeProxy = new TransparentUpgradeableProxy(address(impl), relayOwner, initStore);
             vm.stopBroadcast();
             stateStoreOf[dstChainId] = address(storeProxy);
+            stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(address(storeProxy));
             console.log("StateStore proxy:", stateStoreOf[dstChainId]);
+            console.log("StateStore proxy admin:", stateStoreProxyAdminOf[dstChainId]);
         } else {
             console.log("StateStore already at:", stateStoreOf[dstChainId]);
+            if (stateStoreProxyAdminOf[dstChainId] == address(0)) {
+                stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(stateStoreOf[dstChainId]);
+            }
         }
 
         if (!isContract(stateReceiverOf[dstChainId])) {
@@ -230,12 +268,17 @@ contract StateRelayBase is BaseData {
             LayerZeroReceiverTransport recvImpl = new LayerZeroReceiverTransport(lzEndpoint);
             bytes memory recvInit =
                 abi.encodeCall(LayerZeroReceiverTransport.initialize, (relayOwner, stateStoreOf[dstChainId]));
-            ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
+            TransparentUpgradeableProxy recvProxy = new TransparentUpgradeableProxy(address(recvImpl), relayOwner, recvInit);
             vm.stopBroadcast();
             stateReceiverOf[dstChainId] = address(recvProxy);
+            stateReceiverProxyAdminOf[dstChainId] = _proxyAdminOf(address(recvProxy));
             console.log("StateReceiver proxy:", stateReceiverOf[dstChainId]);
+            console.log("StateReceiver proxy admin:", stateReceiverProxyAdminOf[dstChainId]);
         } else {
             console.log("StateReceiver already at:", stateReceiverOf[dstChainId]);
+            if (stateReceiverProxyAdminOf[dstChainId] == address(0)) {
+                stateReceiverProxyAdminOf[dstChainId] = _proxyAdminOf(stateReceiverOf[dstChainId]);
+            }
         }
 
         StateStore store = StateStore(stateStoreOf[dstChainId]);
@@ -273,13 +316,14 @@ contract StateRelayBase is BaseData {
         _startBroadcast();
         LayerZeroSenderTransport transportImpl = new LayerZeroSenderTransport(lzEndpoint);
         bytes memory transportInit = abi.encodeCall(LayerZeroSenderTransport.initialize, (relayOwner));
-        ERC1967Proxy transportProxy = new ERC1967Proxy(address(transportImpl), transportInit);
+        TransparentUpgradeableProxy transportProxy =
+            new TransparentUpgradeableProxy(address(transportImpl), relayOwner, transportInit);
 
         StateSender impl = new StateSender();
         bytes memory init = abi.encodeCall(
             StateSender.initialize, (relayOwner, address(transportProxy), s.target, s.callData, s.protocolVersion)
         );
-        ERC1967Proxy proxy = new ERC1967Proxy(address(impl), init);
+        TransparentUpgradeableProxy proxy = new TransparentUpgradeableProxy(address(impl), relayOwner, init);
         LayerZeroSenderTransport(address(transportProxy))
             .grantRole(LayerZeroSenderTransport(address(transportProxy)).SENDER_ROLE(), address(proxy));
         StateSender(address(proxy)).grantRole(StateSender(address(proxy)).PAUSER_ROLE(), relayOwner);
@@ -294,10 +338,17 @@ contract StateRelayBase is BaseData {
         vm.stopBroadcast();
 
         stateSenderOf[slot] = address(proxy);
+        stateSenderProxyAdminOf[slot] = _proxyAdminOf(address(proxy));
+        stateSenderTransportOf[slot] = address(transportProxy);
+        stateSenderTransportProxyAdminOf[slot] = _proxyAdminOf(address(transportProxy));
         console.log("StateSender [%s] proxy:", label);
         console.logAddress(address(proxy));
+        console.log("StateSender [%s] proxy admin:", label);
+        console.logAddress(stateSenderProxyAdminOf[slot]);
         console.log("StateSender [%s] transport:", label);
         console.logAddress(address(transportProxy));
+        console.log("StateSender [%s] transport proxy admin:", label);
+        console.logAddress(stateSenderTransportProxyAdminOf[slot]);
     }
 
     /// @dev Merges into the deployment file on disk: call `loadDeployment()` first so in-memory maps include prior
@@ -319,11 +370,25 @@ contract StateRelayBase is BaseData {
                     string.concat(".chains.", chainIdStr, ".stateStore")
                 );
             }
+            if (stateStoreProxyAdminOf[chainId] != address(0)) {
+                vm.writeJson(
+                    string.concat('"', vm.toString(stateStoreProxyAdminOf[chainId]), '"'),
+                    path,
+                    string.concat(".chains.", chainIdStr, ".stateStoreProxyAdmin")
+                );
+            }
             if (stateReceiverOf[chainId] != address(0)) {
                 vm.writeJson(
                     string.concat('"', vm.toString(stateReceiverOf[chainId]), '"'),
                     path,
                     string.concat(".chains.", chainIdStr, ".stateReceiver")
+                );
+            }
+            if (stateReceiverProxyAdminOf[chainId] != address(0)) {
+                vm.writeJson(
+                    string.concat('"', vm.toString(stateReceiverProxyAdminOf[chainId]), '"'),
+                    path,
+                    string.concat(".chains.", chainIdStr, ".stateReceiverProxyAdmin")
                 );
             }
 
@@ -333,13 +398,28 @@ contract StateRelayBase is BaseData {
                 if (s.chainId != chainId) continue;
                 address deployed = stateSenderOf[senderSlot(chainId, label)];
                 if (deployed == address(0)) continue;
+                bytes32 slot = senderSlot(chainId, label);
 
                 string memory objKey = string.concat("sndW_", chainIdStr, "_", label);
                 string memory senderObj = vm.serializeAddress(objKey, "address", deployed);
+                if (stateSenderProxyAdminOf[slot] != address(0)) {
+                    senderObj = vm.serializeAddress(objKey, "proxyAdmin", stateSenderProxyAdminOf[slot]);
+                }
+                if (stateSenderTransportOf[slot] != address(0)) {
+                    senderObj = vm.serializeAddress(objKey, "transport", stateSenderTransportOf[slot]);
+                }
+                if (stateSenderTransportProxyAdminOf[slot] != address(0)) {
+                    senderObj =
+                        vm.serializeAddress(objKey, "transportProxyAdmin", stateSenderTransportProxyAdminOf[slot]);
+                }
                 vm.writeJson(senderObj, path, string.concat(".chains.", chainIdStr, ".senders.", label));
             }
         }
 
         console.log("Wrote deployment to %s", path);
+    }
+
+    function _proxyAdminOf(address proxy) internal view returns (address) {
+        return address(uint160(uint256(vm.load(proxy, ERC1967_ADMIN_SLOT))));
     }
 }

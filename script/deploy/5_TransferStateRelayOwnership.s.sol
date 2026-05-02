@@ -32,11 +32,15 @@ contract TransferStateRelayOwnership is StateRelayBase {
         address st = stateStoreOf[cid];
         if (st != address(0)) {
             _transferStateStoreRoles(StateStore(st), nextOwner, pk);
+            _transferProxyAdminOwnership(stateStoreProxyAdminOf[cid], "StateStore proxy admin", nextOwner, pk);
         }
 
         address rc = stateReceiverOf[cid];
         if (rc != address(0)) {
             _transferStateReceiverRoles(LayerZeroReceiverTransport(rc), nextOwner, pk);
+            _transferProxyAdminOwnership(
+                stateReceiverProxyAdminOf[cid], "StateReceiver proxy admin", nextOwner, pk
+            );
             Ownable o = Ownable(rc);
             if (o.owner() != nextOwner) {
                 if (o.owner() != relayOwner) revert NotOwner();
@@ -51,11 +55,21 @@ contract TransferStateRelayOwnership is StateRelayBase {
             if (senderByLabel[label].chainId != cid) continue;
             address snd = stateSenderOf[senderSlot(cid, label)];
             if (snd == address(0)) continue;
+            bytes32 slot = senderSlot(cid, label);
 
             _transferStateSenderRoles(StateSender(snd), label, nextOwner, pk);
+            _transferProxyAdminOwnership(
+                stateSenderProxyAdminOf[slot], string.concat("StateSender [", label, "] proxy admin"), nextOwner, pk
+            );
 
             LayerZeroSenderTransport transport = LayerZeroSenderTransport(address(StateSender(snd).transport()));
             _transferStateSenderTransportRoles(transport, label, nextOwner, pk);
+            _transferProxyAdminOwnership(
+                stateSenderTransportProxyAdminOf[slot],
+                string.concat("StateSender transport [", label, "] proxy admin"),
+                nextOwner,
+                pk
+            );
             if (transport.owner() != nextOwner) {
                 if (transport.owner() != relayOwner) revert NotOwner();
                 vm.broadcast(pk);
@@ -214,5 +228,19 @@ contract TransferStateRelayOwnership is StateRelayBase {
         vm.stopBroadcast();
 
         console.log("StateSender transport [%s] roles -> OFT_OWNER", label);
+    }
+
+    function _transferProxyAdminOwnership(address proxyAdmin, string memory what, address nextOwner, uint256 pk)
+        internal
+    {
+        if (proxyAdmin == address(0)) return;
+
+        Ownable admin = Ownable(proxyAdmin);
+        if (admin.owner() == nextOwner) return;
+        if (admin.owner() != relayOwner) revert NotOwner();
+
+        vm.broadcast(pk);
+        admin.transferOwnership(nextOwner);
+        console.log("%s -> OFT_OWNER", what);
     }
 }
