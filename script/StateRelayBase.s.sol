@@ -33,7 +33,7 @@ contract StateRelayBase is BaseData {
     uint256 internal receiverChainId;
     uint256 internal constant PROXY_ADMIN_TIMELOCK_DELAY = 1 days;
     // Default LayerZero executor gas forwarded to the destination chain `lzReceive` call.
-    uint128 internal constant DEFAULT_LZ_RECEIVE_GAS_LIMIT = 300_000;
+    uint128 internal constant DEFAULT_LZ_RECEIVE_GAS_LIMIT = 500_000;
 
     uint256[] internal chainIdsWithInput;
 
