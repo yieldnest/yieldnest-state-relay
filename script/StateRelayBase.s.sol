@@ -32,6 +32,8 @@ contract StateRelayBase is BaseData {
     address internal relayDeployer;
     uint256 internal receiverChainId;
     uint256 internal constant PROXY_ADMIN_TIMELOCK_DELAY = 1 days;
+    // Default LayerZero executor gas forwarded to the destination chain `lzReceive` call.
+    uint128 internal constant DEFAULT_LZ_RECEIVE_GAS_LIMIT = 300_000;
 
     uint256[] internal chainIdsWithInput;
 
@@ -55,7 +57,7 @@ contract StateRelayBase is BaseData {
         0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     function defaultSendOptions() internal pure returns (bytes memory) {
-        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), 300_000, 0);
+        return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), DEFAULT_LZ_RECEIVE_GAS_LIMIT, 0);
     }
 
     function senderSlot(uint256 chainId, string memory label) internal pure returns (bytes32) {
