@@ -22,7 +22,6 @@ contract StateRelayBase is BaseData {
         uint256 chainId;
         address target;
         bytes callData;
-        address refundAddress;
         uint256 protocolVersion;
     }
 
@@ -124,14 +123,13 @@ contract StateRelayBase is BaseData {
             uint256 sChain = vm.parseJsonUint(json, string.concat(sp, ".chainId"));
             address target = vm.parseJsonAddress(json, string.concat(sp, ".target"));
             bytes memory callData = vm.parseJsonBytes(json, string.concat(sp, ".callData"));
-            address refund = vm.parseJsonAddress(json, string.concat(sp, ".refundAddress"));
             uint256 pVer = vm.parseJsonUint(json, string.concat(sp, ".protocolVersion"));
             require(target != address(0), "StateRelay: sender target");
             require(callData.length > 0, "StateRelay: sender callData");
             require(isSupportedChainId(sChain), "StateRelay: sender chainId not in BaseData");
             senderLabels.push(label);
             senderByLabel[label] = SenderInput({
-                chainId: sChain, target: target, callData: callData, refundAddress: refund, protocolVersion: pVer
+                chainId: sChain, target: target, callData: callData, protocolVersion: pVer
             });
             _pushUniqueChainId(sChain);
         }
