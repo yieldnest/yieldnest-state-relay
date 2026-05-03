@@ -66,10 +66,10 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             string memory label = senderLabels[i];
             uint256 srcChain = senderByLabel[label].chainId;
             if (srcChain == receiverChainId) continue;
-            address snd = stateSenderOf[senderSlot(srcChain, label)];
-            require(snd != address(0), "StateRelay: configure receiver: sender not deployed");
+            address stateSender = stateSenderOf[senderSlot(srcChain, label)];
+            require(stateSender != address(0), "StateRelay: configure receiver: sender not deployed");
             remoteChainIds[k] = srcChain;
-            peerForRemote[k] = addressToBytes32(_senderTransport(snd));
+            peerForRemote[k] = addressToBytes32(_senderTransport(stateSender));
             k++;
         }
     }
@@ -212,8 +212,8 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
         for (uint256 i; i < otherChainIds.length; i++) {
             uint256 chainId = otherChainIds[i];
             uint32 eid = getEID(chainId);
-            (address lib, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
-            if (lib == getData(block.chainid).LZ_RECEIVE_LIB && isDefault == false) {
+            (address receiveLibrary, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
+            if (receiveLibrary == getData(block.chainid).LZ_RECEIVE_LIB && isDefault == false) {
                 console.log("Receive lib already set chainId", chainId);
                 continue;
             }
@@ -258,13 +258,13 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
     function _sortAddresses(address[] memory addrs) internal pure {
         uint256 len = addrs.length;
         for (uint256 i = 1; i < len; i++) {
-            address key = addrs[i];
+            address currentAddress = addrs[i];
             uint256 j = i;
-            while (j > 0 && addrs[j - 1] > key) {
+            while (j > 0 && addrs[j - 1] > currentAddress) {
                 addrs[j] = addrs[j - 1];
                 j--;
             }
-            addrs[j] = key;
+            addrs[j] = currentAddress;
         }
     }
 

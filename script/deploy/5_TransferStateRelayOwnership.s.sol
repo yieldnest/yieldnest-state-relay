@@ -28,19 +28,19 @@ contract TransferStateRelayOwnership is StateRelayBase {
         address nextOwner = getData(block.chainid).OFT_OWNER;
         uint256 cid = block.chainid;
 
-        address st = stateStoreOf[cid];
-        if (st != address(0)) {
-            _transferStateStoreRoles(StateStore(st), nextOwner);
+        address stateStore = stateStoreOf[cid];
+        if (stateStore != address(0)) {
+            _transferStateStoreRoles(StateStore(stateStore), nextOwner);
         }
 
-        address rc = stateReceiverOf[cid];
-        if (rc != address(0)) {
-            _transferStateReceiverRoles(LayerZeroReceiverTransport(rc), nextOwner);
-            Ownable o = Ownable(rc);
-            if (o.owner() != nextOwner) {
-                if (o.owner() != relayDeployer) revert NotOwner();
+        address stateReceiver = stateReceiverOf[cid];
+        if (stateReceiver != address(0)) {
+            _transferStateReceiverRoles(LayerZeroReceiverTransport(stateReceiver), nextOwner);
+            Ownable stateReceiverOwnable = Ownable(stateReceiver);
+            if (stateReceiverOwnable.owner() != nextOwner) {
+                if (stateReceiverOwnable.owner() != relayDeployer) revert NotOwner();
                 _broadcastOnce();
-                o.transferOwnership(nextOwner);
+                stateReceiverOwnable.transferOwnership(nextOwner);
                 console.log("StateReceiver ownership -> OFT_OWNER");
             }
         }
@@ -48,17 +48,18 @@ contract TransferStateRelayOwnership is StateRelayBase {
         for (uint256 i; i < senderLabels.length; i++) {
             string memory label = senderLabels[i];
             if (senderByLabel[label].chainId != cid) continue;
-            address snd = stateSenderOf[senderSlot(cid, label)];
-            if (snd == address(0)) continue;
+            address stateSender = stateSenderOf[senderSlot(cid, label)];
+            if (stateSender == address(0)) continue;
 
-            _transferStateSenderRoles(StateSender(snd), label, nextOwner);
+            _transferStateSenderRoles(StateSender(stateSender), label, nextOwner);
 
-            LayerZeroSenderTransport transport = LayerZeroSenderTransport(address(StateSender(snd).transport()));
-            _transferStateSenderTransportRoles(transport, label, nextOwner);
-            if (transport.owner() != nextOwner) {
-                if (transport.owner() != relayDeployer) revert NotOwner();
+            LayerZeroSenderTransport senderTransport =
+                LayerZeroSenderTransport(address(StateSender(stateSender).transport()));
+            _transferStateSenderTransportRoles(senderTransport, label, nextOwner);
+            if (senderTransport.owner() != nextOwner) {
+                if (senderTransport.owner() != relayDeployer) revert NotOwner();
                 _broadcastOnce();
-                transport.transferOwnership(nextOwner);
+                senderTransport.transferOwnership(nextOwner);
                 console.log("StateSender transport [%s] ownership -> OFT_OWNER", label);
             }
         }

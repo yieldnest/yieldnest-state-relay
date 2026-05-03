@@ -64,10 +64,10 @@ contract StateRelayBase is BaseData {
         return keccak256(abi.encodePacked(chainId, bytes(label)));
     }
 
-    function isContract(address a) internal view returns (bool) {
+    function isContract(address candidateAddress) internal view returns (bool) {
         uint256 size;
         assembly {
-            size := extcodesize(a)
+            size := extcodesize(candidateAddress)
         }
         return size > 0;
     }
@@ -169,23 +169,27 @@ contract StateRelayBase is BaseData {
         for (uint256 i; i < chainIdsWithInput.length; i++) {
             uint256 depChainId = chainIdsWithInput[i];
             string memory cpre = string.concat(".chains.", vm.toString(depChainId));
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStore")) returns (address st) {
-                if (st != address(0)) stateStoreOf[depChainId] = st;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStore")) returns (address stateStore) {
+                if (stateStore != address(0)) stateStoreOf[depChainId] = stateStore;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdmin")) returns (address pa) {
-                if (pa != address(0)) stateStoreProxyAdminOf[depChainId] = pa;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdmin")) returns (address stateStoreProxyAdmin) {
+                if (stateStoreProxyAdmin != address(0)) stateStoreProxyAdminOf[depChainId] = stateStoreProxyAdmin;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdminTimelock")) returns (address tl) {
-                if (tl != address(0)) stateStoreProxyAdminTimelockOf[depChainId] = tl;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdminTimelock")) returns (address stateStoreProxyAdminTimelock) {
+                if (stateStoreProxyAdminTimelock != address(0)) {
+                    stateStoreProxyAdminTimelockOf[depChainId] = stateStoreProxyAdminTimelock;
+                }
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver")) returns (address rc) {
-                if (rc != address(0)) stateReceiverOf[depChainId] = rc;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver")) returns (address stateReceiver) {
+                if (stateReceiver != address(0)) stateReceiverOf[depChainId] = stateReceiver;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdmin")) returns (address pa) {
-                if (pa != address(0)) stateReceiverProxyAdminOf[depChainId] = pa;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdmin")) returns (address stateReceiverProxyAdmin) {
+                if (stateReceiverProxyAdmin != address(0)) stateReceiverProxyAdminOf[depChainId] = stateReceiverProxyAdmin;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdminTimelock")) returns (address tl) {
-                if (tl != address(0)) stateReceiverProxyAdminTimelockOf[depChainId] = tl;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdminTimelock")) returns (address stateReceiverProxyAdminTimelock) {
+                if (stateReceiverProxyAdminTimelock != address(0)) {
+                    stateReceiverProxyAdminTimelockOf[depChainId] = stateReceiverProxyAdminTimelock;
+                }
             } catch {}
         }
 
@@ -193,43 +197,49 @@ contract StateRelayBase is BaseData {
             string memory label = senderLabels[i];
             SenderInput memory s = senderByLabel[label];
             string memory byChain = string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".address");
-            try vm.parseJsonAddress(json, byChain) returns (address sAddr) {
-                if (sAddr != address(0)) {
+            try vm.parseJsonAddress(json, byChain) returns (address stateSender) {
+                if (stateSender != address(0)) {
                     bytes32 slot = senderSlot(s.chainId, label);
-                    stateSenderOf[slot] = sAddr;
+                    stateSenderOf[slot] = stateSender;
                     try vm.parseJsonAddress(json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdmin"))
-                    returns (address pa) {
-                        if (pa != address(0)) stateSenderProxyAdminOf[slot] = pa;
+                    returns (address stateSenderProxyAdmin) {
+                        if (stateSenderProxyAdmin != address(0)) stateSenderProxyAdminOf[slot] = stateSenderProxyAdmin;
                     } catch {}
                     try vm.parseJsonAddress(
                         json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdminTimelock")
-                    ) returns (address tl) {
-                        if (tl != address(0)) stateSenderProxyAdminTimelockOf[slot] = tl;
+                    ) returns (address stateSenderProxyAdminTimelock) {
+                        if (stateSenderProxyAdminTimelock != address(0)) {
+                            stateSenderProxyAdminTimelockOf[slot] = stateSenderProxyAdminTimelock;
+                        }
                     } catch {}
                     try vm.parseJsonAddress(
                         json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transport")
-                    ) returns (address ta) {
-                        if (ta != address(0)) stateSenderTransportOf[slot] = ta;
+                    ) returns (address stateSenderTransport) {
+                        if (stateSenderTransport != address(0)) stateSenderTransportOf[slot] = stateSenderTransport;
                     } catch {}
                     try vm.parseJsonAddress(
                         json,
                         string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transportProxyAdmin")
-                    ) returns (address tpa) {
-                        if (tpa != address(0)) stateSenderTransportProxyAdminOf[slot] = tpa;
+                    ) returns (address stateSenderTransportProxyAdmin) {
+                        if (stateSenderTransportProxyAdmin != address(0)) {
+                            stateSenderTransportProxyAdminOf[slot] = stateSenderTransportProxyAdmin;
+                        }
                     } catch {}
                     try vm.parseJsonAddress(
                         json,
                         string.concat(
                             ".chains.", vm.toString(s.chainId), ".senders.", label, ".transportProxyAdminTimelock"
                         )
-                    ) returns (address ttl) {
-                        if (ttl != address(0)) stateSenderTransportProxyAdminTimelockOf[slot] = ttl;
+                    ) returns (address stateSenderTransportProxyAdminTimelock) {
+                        if (stateSenderTransportProxyAdminTimelock != address(0)) {
+                            stateSenderTransportProxyAdminTimelockOf[slot] = stateSenderTransportProxyAdminTimelock;
+                        }
                     } catch {}
                 }
             } catch {
                 string memory legacy = string.concat(".senderContracts.", label, ".address");
-                try vm.parseJsonAddress(json, legacy) returns (address sAddr) {
-                    if (sAddr != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = sAddr;
+                try vm.parseJsonAddress(json, legacy) returns (address stateSender) {
+                    if (stateSender != address(0)) stateSenderOf[senderSlot(s.chainId, label)] = stateSender;
                 } catch {}
             }
         }
