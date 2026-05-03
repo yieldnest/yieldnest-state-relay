@@ -65,7 +65,7 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
 
     /**
      * @notice Initializes the store and seeds its initial writer set.
-     * @param owner_ Address granted the default admin, version-manager, and writer-manager roles.
+     * @param owner_ Address granted the default admin, version-manager, writer-manager, and pauser roles.
      * @param writers_ Addresses granted the writer role at initialization.
      */
     function initialize(address owner_, address[] memory writers_) external initializer {
@@ -74,6 +74,7 @@ contract StateStore is Initializable, AccessControlUpgradeable, PausableUpgradea
         __Pausable_init();
         if (owner_ == address(0)) revert StateStore_OwnerCannotBeZero();
         _grantRole(DEFAULT_ADMIN_ROLE, owner_);
+        _grantRole(PAUSER_ROLE, owner_);
         _grantRole(VERSION_MANAGER_ROLE, owner_);
         _grantRole(WRITER_MANAGER_ROLE, owner_);
         _setRoleAdmin(WRITER_ROLE, WRITER_MANAGER_ROLE);

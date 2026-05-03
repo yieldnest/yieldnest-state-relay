@@ -49,7 +49,7 @@ contract StateSender is AccessControlUpgradeable, PausableUpgradeable {
 
     /**
      * @notice Initializes the sender app with its transport and read target configuration.
-     * @param _owner Address granted admin, config-manager, and transport-manager roles.
+     * @param _owner Address granted admin, config-manager, transport-manager, and pauser roles.
      * @param _transport Transport adapter used to quote and send relay messages.
      * @param _target Contract queried via `staticcall` for relay state.
      * @param _callData Calldata used for the state read on `_target`.
@@ -64,6 +64,7 @@ contract StateSender is AccessControlUpgradeable, PausableUpgradeable {
         __Pausable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(CONFIG_MANAGER_ROLE, _owner);
+        _grantRole(PAUSER_ROLE, _owner);
         _grantRole(TRANSPORT_MANAGER_ROLE, _owner);
         _setTransport(_transport);
         $.target = _target;
