@@ -26,12 +26,12 @@ contract StateReceiverTest is Test, TestHelperOz5 {
         stateStore = StateStore(address(storeProxy));
 
         StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[EID]));
-        bytes memory recvInit =
-            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
+        bytes memory recvInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this)));
         ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
         receiver = StateReceiverHarness(address(recvProxy));
 
         receiver.grantRole(receiver.PAUSER_ROLE(), address(this));
+        receiver.setStateStore(address(stateStore));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
     }
 

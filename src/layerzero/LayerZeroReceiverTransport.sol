@@ -14,6 +14,7 @@ import {StateStore} from "../StateStore.sol";
 contract LayerZeroReceiverTransport is OAppUpgradeable, AccessControlUpgradeable, PausableUpgradeable {
     string public constant VERSION = "0.1.0";
     bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant STATE_STORE_MANAGER_ROLE = keccak256("STATE_STORE_MANAGER_ROLE");
 
     /// @custom:storage-location erc7201:yieldnest.storage.lz_receiver_transport
     struct LayerZeroReceiverTransportStorage {
@@ -22,6 +23,7 @@ contract LayerZeroReceiverTransport is OAppUpgradeable, AccessControlUpgradeable
 
     event MessageReceived(uint256 version, bytes32 key, bytes value, uint64 srcTimestamp);
     event StaleMessageIgnored(uint256 version, bytes32 key, uint64 srcTimestamp);
+    event StateStoreSet(address previousStateStore, address newStateStore);
 
     error LayerZeroReceiverTransport_InvalidOwner();
     error LayerZeroReceiverTransport_InvalidStateStore();
@@ -33,20 +35,31 @@ contract LayerZeroReceiverTransport is OAppUpgradeable, AccessControlUpgradeable
     }
 
     /**
-     * @notice Initializes the LayerZero receiver transport with its backing state store.
-     * @param _owner Owner, LayerZero delegate, default admin, and pauser for this transport.
-     * @param _stateStore Store that will validate and persist inbound relay messages.
+     * @notice Initializes the LayerZero receiver transport.
+     * @param _owner Owner, LayerZero delegate, default admin, pauser, and state-store manager for this transport.
      */
-    function initialize(address _owner, address _stateStore) external initializer {
+    function initialize(address _owner) external initializer {
         if (_owner == address(0)) revert LayerZeroReceiverTransport_InvalidOwner();
-        if (_stateStore == address(0)) revert LayerZeroReceiverTransport_InvalidStateStore();
         __AccessControl_init();
         __Ownable_init(_owner);
         __OApp_init(_owner);
         __Pausable_init();
         _grantRole(DEFAULT_ADMIN_ROLE, _owner);
         _grantRole(PAUSER_ROLE, _owner);
-        _getLayerZeroReceiverTransportStorage().stateStore = StateStore(_stateStore);
+        _grantRole(STATE_STORE_MANAGER_ROLE, _owner);
+    }
+
+    /**
+     * @notice Sets the backing state store used to validate and persist relay updates.
+     * @param _stateStore Store that will validate and persist inbound relay messages.
+     */
+    function setStateStore(address _stateStore) external onlyRole(STATE_STORE_MANAGER_ROLE) {
+        if (_stateStore == address(0)) revert LayerZeroReceiverTransport_InvalidStateStore();
+
+        LayerZeroReceiverTransportStorage storage $ = _getLayerZeroReceiverTransportStorage();
+        address previousStateStore = address($.stateStore);
+        $.stateStore = StateStore(_stateStore);
+        emit StateStoreSet(previousStateStore, _stateStore);
     }
 
     /**

@@ -103,10 +103,10 @@ abstract contract StateRelayForkTestBase is Test, TestHelperOz5, StateRelayForkA
         destinationStateStore = StateStore(address(storeProxy));
 
         LayerZeroReceiverTransport receiverImpl = new LayerZeroReceiverTransport(address(endpoints[DST_EID]));
-        bytes memory receiverInit =
-            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(destinationStateStore)));
+        bytes memory receiverInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this)));
         ERC1967Proxy receiverProxy = new ERC1967Proxy(address(receiverImpl), receiverInit);
         receiverTransport = LayerZeroReceiverTransport(address(receiverProxy));
+        receiverTransport.setStateStore(address(destinationStateStore));
         destinationStateStore.grantRole(destinationStateStore.WRITER_ROLE(), address(receiverTransport));
 
         wireOApps(toAddressArray(address(transportProxy), address(receiverProxy)));
@@ -261,12 +261,12 @@ contract StateRelayForkMainnetToArbitrumTest is Test, TestHelperOz5, StateRelayF
             stateStore = StateStore(address(storeProxy));
 
             StateReceiverHarness recvImpl = new StateReceiverHarness(address(endpoints[ARB_EID]));
-            bytes memory recvInit =
-                abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
+            bytes memory recvInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this)));
             ERC1967Proxy recvProxy = new ERC1967Proxy(address(recvImpl), recvInit);
             receiver = StateReceiverHarness(address(recvProxy));
         }
 
+        receiver.setStateStore(address(stateStore));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiver));
 
         bytes memory message = abi.encode(uint256(1), key, stateData, srcTs);

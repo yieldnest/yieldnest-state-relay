@@ -289,34 +289,12 @@ contract StateRelayBase is BaseData {
     function _deployDestination(address lzEndpoint) internal {
         uint256 dstChainId = block.chainid;
         address destinationOwner = getData(dstChainId).OFT_OWNER;
-        if (!isContract(stateStoreOf[dstChainId])) {
-            _startBroadcast();
-            address stateStoreTimelock = _deployTimelockController(getData(dstChainId).OFT_OWNER, PROXY_ADMIN_TIMELOCK_DELAY);
-            StateStore impl = new StateStore();
-            bytes memory initStore = abi.encodeCall(StateStore.initialize, (relayDeployer, new address[](0)));
-            TransparentUpgradeableProxy storeProxy =
-                new TransparentUpgradeableProxy(address(impl), stateStoreTimelock, initStore);
-            vm.stopBroadcast();
-            stateStoreOf[dstChainId] = address(storeProxy);
-            stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(address(storeProxy));
-            stateStoreProxyAdminTimelockOf[dstChainId] = stateStoreTimelock;
-            console.log("StateStore proxy:", stateStoreOf[dstChainId]);
-            console.log("StateStore proxy admin:", stateStoreProxyAdminOf[dstChainId]);
-            console.log("StateStore proxy admin timelock:", stateStoreProxyAdminTimelockOf[dstChainId]);
-        } else {
-            console.log("StateStore already at:", stateStoreOf[dstChainId]);
-            if (stateStoreProxyAdminOf[dstChainId] == address(0)) {
-                stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(stateStoreOf[dstChainId]);
-            }
-        }
-
         if (!isContract(stateReceiverOf[dstChainId])) {
             _startBroadcast();
             address stateReceiverTimelock =
                 _deployTimelockController(getData(dstChainId).OFT_OWNER, PROXY_ADMIN_TIMELOCK_DELAY);
             LayerZeroReceiverTransport recvImpl = new LayerZeroReceiverTransport(lzEndpoint);
-            bytes memory recvInit =
-                abi.encodeCall(LayerZeroReceiverTransport.initialize, (relayDeployer, stateStoreOf[dstChainId]));
+            bytes memory recvInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (relayDeployer));
             TransparentUpgradeableProxy recvProxy =
                 new TransparentUpgradeableProxy(address(recvImpl), stateReceiverTimelock, recvInit);
             vm.stopBroadcast();
@@ -333,21 +311,36 @@ contract StateRelayBase is BaseData {
             }
         }
 
-        StateStore store = StateStore(stateStoreOf[dstChainId]);
-        if (!store.isWriter(stateReceiverOf[dstChainId])) {
+        if (!isContract(stateStoreOf[dstChainId])) {
             _startBroadcast();
-            store.grantRole(store.WRITER_ROLE(), stateReceiverOf[dstChainId]);
+            address stateStoreTimelock = _deployTimelockController(destinationOwner, PROXY_ADMIN_TIMELOCK_DELAY);
+            StateStore impl = new StateStore();
+            address[] memory writers = new address[](1);
+            writers[0] = stateReceiverOf[dstChainId];
+            bytes memory initStore = abi.encodeCall(StateStore.initialize, (destinationOwner, writers));
+            TransparentUpgradeableProxy storeProxy =
+                new TransparentUpgradeableProxy(address(impl), stateStoreTimelock, initStore);
             vm.stopBroadcast();
-            console.log("Granted StateReceiver writer on StateStore");
+            stateStoreOf[dstChainId] = address(storeProxy);
+            stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(address(storeProxy));
+            stateStoreProxyAdminTimelockOf[dstChainId] = stateStoreTimelock;
+            console.log("StateStore proxy:", stateStoreOf[dstChainId]);
+            console.log("StateStore proxy admin:", stateStoreProxyAdminOf[dstChainId]);
+            console.log("StateStore proxy admin timelock:", stateStoreProxyAdminTimelockOf[dstChainId]);
+        } else {
+            console.log("StateStore already at:", stateStoreOf[dstChainId]);
+            if (stateStoreProxyAdminOf[dstChainId] == address(0)) {
+                stateStoreProxyAdminOf[dstChainId] = _proxyAdminOf(stateStoreOf[dstChainId]);
+            }
         }
 
-        _handoffStateStoreToDestinationOwner(store, destinationOwner);
-
         LayerZeroReceiverTransport receiver = LayerZeroReceiverTransport(stateReceiverOf[dstChainId]);
-        _startBroadcast();
-        receiver.grantRole(receiver.PAUSER_ROLE(), destinationOwner);
-        vm.stopBroadcast();
-        console.log("Granted StateReceiver PAUSER_ROLE to OFT_OWNER");
+        if (address(receiver.stateStore()) != stateStoreOf[dstChainId]) {
+            _startBroadcast();
+            receiver.setStateStore(stateStoreOf[dstChainId]);
+            vm.stopBroadcast();
+            console.log("Configured StateReceiver state store");
+        }
     }
 
     function _deploySender(string memory label, SenderInput memory s, address lzEndpoint) internal {
@@ -488,23 +481,6 @@ contract StateRelayBase is BaseData {
         uint256[] memory destinationIds = new uint256[](1);
         destinationIds[0] = receiverChainId;
         senderTransport.setDestination(destinationConfigs, destinationIds);
-    }
-
-    function _handoffStateStoreToDestinationOwner(StateStore stateStore, address destinationOwner) internal {
-        if (destinationOwner == relayDeployer) return;
-        if (!stateStore.hasRole(stateStore.DEFAULT_ADMIN_ROLE(), relayDeployer)) return;
-
-        _startBroadcast();
-        stateStore.grantRole(stateStore.DEFAULT_ADMIN_ROLE(), destinationOwner);
-        stateStore.grantRole(stateStore.VERSION_MANAGER_ROLE(), destinationOwner);
-        stateStore.grantRole(stateStore.WRITER_MANAGER_ROLE(), destinationOwner);
-        stateStore.grantRole(stateStore.PAUSER_ROLE(), destinationOwner);
-        stateStore.renounceRole(stateStore.PAUSER_ROLE(), relayDeployer);
-        stateStore.renounceRole(stateStore.WRITER_MANAGER_ROLE(), relayDeployer);
-        stateStore.renounceRole(stateStore.VERSION_MANAGER_ROLE(), relayDeployer);
-        stateStore.renounceRole(stateStore.DEFAULT_ADMIN_ROLE(), relayDeployer);
-        vm.stopBroadcast();
-        console.log("StateStore roles -> OFT_OWNER");
     }
 
     function _deployTimelockController(address owner, uint256 minDelay) internal returns (address timelock) {

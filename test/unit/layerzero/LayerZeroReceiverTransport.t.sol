@@ -35,10 +35,10 @@ contract LayerZeroReceiverTransportTest is Test, TestHelperOz5 {
         stateStore = StateStore(address(new ERC1967Proxy(address(stateStoreImpl), storeInit)));
 
         LayerZeroReceiverTransport receiverTransportImpl = new LayerZeroReceiverTransport(address(endpoints[DST_EID]));
-        bytes memory receiverInit =
-            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
+        bytes memory receiverInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this)));
         receiverTransport =
             LayerZeroReceiverTransport(address(new ERC1967Proxy(address(receiverTransportImpl), receiverInit)));
+        receiverTransport.setStateStore(address(stateStore));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiverTransport));
 
         wireOApps(_toAddressArray(address(senderTransport), address(receiverTransport)));

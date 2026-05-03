@@ -71,9 +71,9 @@ contract RelayPermissionsTest is Test, TestHelperOz5 {
         stateStore = StateStore(address(new ERC1967Proxy(address(storeImpl), storeInit)));
 
         StateReceiverHarness receiverImpl = new StateReceiverHarness(address(endpoints[DST_EID]));
-        bytes memory receiverInit =
-            abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this), address(stateStore)));
+        bytes memory receiverInit = abi.encodeCall(LayerZeroReceiverTransport.initialize, (address(this)));
         receiverTransport = StateReceiverHarness(address(new ERC1967Proxy(address(receiverImpl), receiverInit)));
+        receiverTransport.setStateStore(address(stateStore));
         stateStore.grantRole(stateStore.WRITER_ROLE(), address(receiverTransport));
     }
 

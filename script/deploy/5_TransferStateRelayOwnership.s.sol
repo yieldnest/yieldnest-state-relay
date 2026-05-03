@@ -5,14 +5,13 @@ pragma solidity ^0.8.22;
 import {console} from "forge-std/console.sol";
 
 import {StateRelayBase} from "../StateRelayBase.s.sol";
-import {StateStore} from "../../src/StateStore.sol";
 import {StateSender} from "../../src/StateSender.sol";
 import {LayerZeroSenderTransport} from "../../src/layerzero/LayerZeroSenderTransport.sol";
 import {LayerZeroReceiverTransport} from "../../src/layerzero/LayerZeroReceiverTransport.sol";
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @notice **Step 5** (optional) — transfer destination store roles, receiver roles + ownership, sender roles, and sender transport roles + ownership on **this** chain to `BaseData` `OFT_OWNER`.
+/// @notice **Step 5** (optional) — transfer receiver roles + ownership and sender transport roles + ownership on **this** chain to `BaseData` `OFT_OWNER`.
 /// @dev Proxy upgrade authority is deployed behind timelocks from the beginning, so this step does not transfer proxy admins.
 ///
 /// Run once per chain; use `$RPC_MAINNET` or `$RPC_ARBITRUM` to match `block.chainid`.
@@ -27,11 +26,6 @@ contract TransferStateRelayOwnership is StateRelayBase {
 
         address nextOwner = getData(block.chainid).OFT_OWNER;
         uint256 cid = block.chainid;
-
-        address stateStore = stateStoreOf[cid];
-        if (stateStore != address(0)) {
-            _transferStateStoreRoles(StateStore(stateStore), nextOwner);
-        }
 
         address stateReceiver = stateReceiverOf[cid];
         if (stateReceiver != address(0)) {
@@ -51,8 +45,6 @@ contract TransferStateRelayOwnership is StateRelayBase {
             address stateSender = stateSenderOf[senderSlot(cid, label)];
             if (stateSender == address(0)) continue;
 
-            _transferStateSenderRoles(StateSender(stateSender), label, nextOwner);
-
             LayerZeroSenderTransport senderTransport =
                 LayerZeroSenderTransport(address(StateSender(stateSender).transport()));
             _transferStateSenderTransportRoles(senderTransport, label, nextOwner);
@@ -65,56 +57,14 @@ contract TransferStateRelayOwnership is StateRelayBase {
         }
     }
 
-    function _transferStateStoreRoles(StateStore store, address nextOwner) internal {
-        bool relayAdmin = store.hasRole(store.DEFAULT_ADMIN_ROLE(), relayDeployer);
-        bool needsGrant = !store.hasRole(store.DEFAULT_ADMIN_ROLE(), nextOwner)
-            || !store.hasRole(store.VERSION_MANAGER_ROLE(), nextOwner)
-            || !store.hasRole(store.WRITER_MANAGER_ROLE(), nextOwner)
-            || !store.hasRole(store.PAUSER_ROLE(), nextOwner);
-        bool needsRenounce = store.hasRole(store.DEFAULT_ADMIN_ROLE(), relayDeployer)
-            || store.hasRole(store.VERSION_MANAGER_ROLE(), relayDeployer)
-            || store.hasRole(store.WRITER_MANAGER_ROLE(), relayDeployer)
-            || store.hasRole(store.PAUSER_ROLE(), relayDeployer);
-
-        if (!needsGrant && !needsRenounce) return;
-        if (needsGrant && !relayAdmin) revert NotOwner();
-
-        vm.startBroadcast();
-        if (!store.hasRole(store.DEFAULT_ADMIN_ROLE(), nextOwner)) {
-            store.grantRole(store.DEFAULT_ADMIN_ROLE(), nextOwner);
-        }
-        if (!store.hasRole(store.VERSION_MANAGER_ROLE(), nextOwner)) {
-            store.grantRole(store.VERSION_MANAGER_ROLE(), nextOwner);
-        }
-        if (!store.hasRole(store.WRITER_MANAGER_ROLE(), nextOwner)) {
-            store.grantRole(store.WRITER_MANAGER_ROLE(), nextOwner);
-        }
-        if (!store.hasRole(store.PAUSER_ROLE(), nextOwner)) {
-            store.grantRole(store.PAUSER_ROLE(), nextOwner);
-        }
-        if (store.hasRole(store.PAUSER_ROLE(), relayDeployer)) {
-            store.renounceRole(store.PAUSER_ROLE(), relayDeployer);
-        }
-        if (store.hasRole(store.WRITER_MANAGER_ROLE(), relayDeployer)) {
-            store.renounceRole(store.WRITER_MANAGER_ROLE(), relayDeployer);
-        }
-        if (store.hasRole(store.VERSION_MANAGER_ROLE(), relayDeployer)) {
-            store.renounceRole(store.VERSION_MANAGER_ROLE(), relayDeployer);
-        }
-        if (store.hasRole(store.DEFAULT_ADMIN_ROLE(), relayDeployer)) {
-            store.renounceRole(store.DEFAULT_ADMIN_ROLE(), relayDeployer);
-        }
-        vm.stopBroadcast();
-
-        console.log("StateStore roles -> OFT_OWNER");
-    }
-
     function _transferStateReceiverRoles(LayerZeroReceiverTransport receiver, address nextOwner) internal {
         bool relayAdmin = receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), relayDeployer);
         bool needsGrant = !receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), nextOwner)
-            || !receiver.hasRole(receiver.PAUSER_ROLE(), nextOwner);
+            || !receiver.hasRole(receiver.PAUSER_ROLE(), nextOwner)
+            || !receiver.hasRole(receiver.STATE_STORE_MANAGER_ROLE(), nextOwner);
         bool needsRenounce = receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), relayDeployer)
-            || receiver.hasRole(receiver.PAUSER_ROLE(), relayDeployer);
+            || receiver.hasRole(receiver.PAUSER_ROLE(), relayDeployer)
+            || receiver.hasRole(receiver.STATE_STORE_MANAGER_ROLE(), relayDeployer);
 
         if (!needsGrant && !needsRenounce) return;
         if (needsGrant && !relayAdmin) revert NotOwner();
@@ -126,8 +76,14 @@ contract TransferStateRelayOwnership is StateRelayBase {
         if (!receiver.hasRole(receiver.PAUSER_ROLE(), nextOwner)) {
             receiver.grantRole(receiver.PAUSER_ROLE(), nextOwner);
         }
+        if (!receiver.hasRole(receiver.STATE_STORE_MANAGER_ROLE(), nextOwner)) {
+            receiver.grantRole(receiver.STATE_STORE_MANAGER_ROLE(), nextOwner);
+        }
         if (receiver.hasRole(receiver.PAUSER_ROLE(), relayDeployer)) {
             receiver.renounceRole(receiver.PAUSER_ROLE(), relayDeployer);
+        }
+        if (receiver.hasRole(receiver.STATE_STORE_MANAGER_ROLE(), relayDeployer)) {
+            receiver.renounceRole(receiver.STATE_STORE_MANAGER_ROLE(), relayDeployer);
         }
         if (receiver.hasRole(receiver.DEFAULT_ADMIN_ROLE(), relayDeployer)) {
             receiver.renounceRole(receiver.DEFAULT_ADMIN_ROLE(), relayDeployer);
@@ -135,52 +91,6 @@ contract TransferStateRelayOwnership is StateRelayBase {
         vm.stopBroadcast();
 
         console.log("StateReceiver roles -> OFT_OWNER");
-    }
-
-    function _transferStateSenderRoles(StateSender sender, string memory label, address nextOwner)
-        internal
-    {
-        bool relayAdmin = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayDeployer);
-        bool needsGrant = !sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)
-            || !sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner)
-            || !sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner)
-            || !sender.hasRole(sender.PAUSER_ROLE(), nextOwner);
-        bool needsRenounce = sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayDeployer)
-            || sender.hasRole(sender.CONFIG_MANAGER_ROLE(), relayDeployer)
-            || sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), relayDeployer)
-            || sender.hasRole(sender.PAUSER_ROLE(), relayDeployer);
-
-        if (!needsGrant && !needsRenounce) return;
-        if (needsGrant && !relayAdmin) revert NotOwner();
-
-        vm.startBroadcast();
-        if (!sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner)) {
-            sender.grantRole(sender.DEFAULT_ADMIN_ROLE(), nextOwner);
-        }
-        if (!sender.hasRole(sender.CONFIG_MANAGER_ROLE(), nextOwner)) {
-            sender.grantRole(sender.CONFIG_MANAGER_ROLE(), nextOwner);
-        }
-        if (!sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner)) {
-            sender.grantRole(sender.TRANSPORT_MANAGER_ROLE(), nextOwner);
-        }
-        if (!sender.hasRole(sender.PAUSER_ROLE(), nextOwner)) {
-            sender.grantRole(sender.PAUSER_ROLE(), nextOwner);
-        }
-        if (sender.hasRole(sender.PAUSER_ROLE(), relayDeployer)) {
-            sender.renounceRole(sender.PAUSER_ROLE(), relayDeployer);
-        }
-        if (sender.hasRole(sender.CONFIG_MANAGER_ROLE(), relayDeployer)) {
-            sender.renounceRole(sender.CONFIG_MANAGER_ROLE(), relayDeployer);
-        }
-        if (sender.hasRole(sender.TRANSPORT_MANAGER_ROLE(), relayDeployer)) {
-            sender.renounceRole(sender.TRANSPORT_MANAGER_ROLE(), relayDeployer);
-        }
-        if (sender.hasRole(sender.DEFAULT_ADMIN_ROLE(), relayDeployer)) {
-            sender.renounceRole(sender.DEFAULT_ADMIN_ROLE(), relayDeployer);
-        }
-        vm.stopBroadcast();
-
-        console.log("StateSender [%s] roles -> OFT_OWNER", label);
     }
 
     function _transferStateSenderTransportRoles(LayerZeroSenderTransport transport, string memory label, address nextOwner)
