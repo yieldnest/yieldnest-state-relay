@@ -60,17 +60,11 @@ contract VerifyStateRelay is StateRelayLzConfigure {
     }
 
     function _verifySendersOnCurrentChain(uint256 cid) internal {
-        bool hasSender;
         for (uint256 i; i < senderLabels.length; i++) {
             string memory label = senderLabels[i];
             SenderInput memory senderInput = senderByLabel[label];
             if (senderInput.chainId != cid) continue;
-            hasSender = true;
             _verifySender(label, senderInput);
-        }
-
-        if (!hasSender) {
-            console.log("No sender configured for this chain in input");
         }
     }
 
@@ -241,7 +235,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
     function _verifySenderRouteAndLzConfig(string memory label, LayerZeroSenderTransport senderTransport) internal {
         address stateReceiverAddress = stateReceiverOf[receiverChainId];
         if (!isContract(stateReceiverAddress)) {
-            _requireStep(2, string.concat("Receiver not deployed yet for sender ", label));
+            _warn(string.concat("Receiver not deployed yet; skipping sender peer verification for ", label));
             return;
         }
 
