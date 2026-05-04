@@ -164,6 +164,29 @@ forge script --sig "run(string,string)" \
 Default deployment artifact path for this input:
 - `deployments/mainnet-xdc-ynrwax-v0.1.0.json`
 
+### Commands
+
+Send the latest source-chain value through the deployed permissionless sender:
+
+```bash
+forge script --sig "run(string,string,string)" \
+  --rpc-url "$ETH_MAINNET_RPC_URL" \
+  --account "$ACCOUNT" \
+  --sender "$DEPLOYER" \
+  --broadcast \
+  script/commands/SendState.s.sol:SendStateCommand \
+  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets"
+```
+
+Read the latest destination-side stored value for that sender label, decoded as `uint256`:
+
+```bash
+forge script --sig "run(string,string,string)" \
+  --rpc-url "$XDC_RPC_URL" \
+  script/commands/ReadStateAsUint256.s.sol:ReadStateAsUint256Command \
+  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets"
+```
+
 ## Peer configuration
 
 - Source chain: set peer `(dstEid, receiver transport proxy address)` on the sender transport for each destination.

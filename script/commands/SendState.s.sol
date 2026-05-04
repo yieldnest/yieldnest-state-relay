@@ -33,9 +33,8 @@ contract SendStateCommand is StateRelayBase {
         console.log("Key: %s", vm.toString(quoteData.key));
         console.log("Required native fee: %s", quoteData.transportQuote.feeAmount);
 
-        _startBroadcast();
+        vm.broadcast();
         stateSender.sendState{value: quoteData.transportQuote.feeAmount}(receiverChainId);
-        vm.stopBroadcast();
 
         console.log("sendState() submitted");
     }
