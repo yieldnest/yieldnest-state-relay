@@ -66,10 +66,14 @@ abstract contract StateRelayLzConfigure is StateRelayBase {
             string memory label = senderLabels[i];
             uint256 srcChain = senderByLabel[label].chainId;
             if (srcChain == receiverChainId) continue;
-            address stateSender = stateSenderOf[senderSlot(srcChain, label)];
-            require(stateSender != address(0), "StateRelay: configure receiver: sender not deployed");
+            bytes32 senderConfigSlot = senderSlot(srcChain, label);
+            address stateSenderTransport = stateSenderTransportOf[senderConfigSlot];
+            require(
+                stateSenderTransport != address(0),
+                "StateRelay: configure receiver: sender transport missing in deployment JSON"
+            );
             remoteChainIds[k] = srcChain;
-            peerForRemote[k] = addressToBytes32(_senderTransport(stateSender));
+            peerForRemote[k] = addressToBytes32(stateSenderTransport);
             k++;
         }
     }
