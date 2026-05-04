@@ -1,7 +1,7 @@
 {
   "name": "mainnet-xdc-ynrwax",
   "version": "v0.1.0",
-  "deployer": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+  "deployer": "0x4C51Ce7B2546e18449fbE16738A8D55bc195a4dd",
   "receiverChainId": 50,
   "senders": {
     "mainnet-ynrwax-convertToAssets": {
