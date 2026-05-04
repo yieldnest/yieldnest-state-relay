@@ -16,9 +16,7 @@ contract SendStateCommand is StateRelayBase {
         loadDeploymentRequired();
 
         SenderInput memory senderInput = _senderInputForLabel(label);
-        require(
-            block.chainid == senderInput.chainId, "StateRelay: send command must run on the sender source chain"
-        );
+        require(block.chainid == senderInput.chainId, "StateRelay: send command must run on the sender source chain");
 
         bytes32 slot = senderSlot(senderInput.chainId, label);
         address stateSenderAddress = stateSenderOf[slot];

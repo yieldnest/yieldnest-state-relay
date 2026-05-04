@@ -13,8 +13,7 @@ import {LayerZeroSenderTransport} from "../src/layerzero/LayerZeroSenderTranspor
 import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/OptionsBuilder.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
-import {TransparentUpgradeableProxy} from
-    "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
 /// @notice Shared input, deployment JSON, and deploy steps for state relay scripts.
 /// @dev Call `setUp()` once at the start of each script `run` (BaseData is not idempotent). Then `loadInput`, `loadDeployment`.
@@ -53,8 +52,7 @@ contract StateRelayBase is BaseData {
     mapping(bytes32 => address) internal stateSenderTransportProxyAdminOf;
     mapping(bytes32 => address) internal stateSenderTransportProxyAdminTimelockOf;
 
-    bytes32 internal constant ERC1967_ADMIN_SLOT =
-        0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
+    bytes32 internal constant ERC1967_ADMIN_SLOT = 0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103;
 
     function defaultSendOptions() internal pure returns (bytes memory) {
         return OptionsBuilder.addExecutorLzReceiveOption(OptionsBuilder.newOptions(), DEFAULT_LZ_RECEIVE_GAS_LIMIT, 0);
@@ -143,9 +141,8 @@ contract StateRelayBase is BaseData {
             require(callData.length > 0, "StateRelay: sender callData");
             require(isSupportedChainId(sChain), "StateRelay: sender chainId not in BaseData");
             senderLabels.push(label);
-            senderByLabel[label] = SenderInput({
-                chainId: sChain, target: target, callData: callData, protocolVersion: pVer
-            });
+            senderByLabel[label] =
+                SenderInput({chainId: sChain, target: target, callData: callData, protocolVersion: pVer});
             _pushUniqueChainId(sChain);
         }
     }
@@ -172,10 +169,14 @@ contract StateRelayBase is BaseData {
             try vm.parseJsonAddress(json, string.concat(cpre, ".stateStore")) returns (address stateStore) {
                 if (stateStore != address(0)) stateStoreOf[depChainId] = stateStore;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdmin")) returns (address stateStoreProxyAdmin) {
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdmin")) returns (
+                address stateStoreProxyAdmin
+            ) {
                 if (stateStoreProxyAdmin != address(0)) stateStoreProxyAdminOf[depChainId] = stateStoreProxyAdmin;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdminTimelock")) returns (address stateStoreProxyAdminTimelock) {
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateStoreProxyAdminTimelock")) returns (
+                address stateStoreProxyAdminTimelock
+            ) {
                 if (stateStoreProxyAdminTimelock != address(0)) {
                     stateStoreProxyAdminTimelockOf[depChainId] = stateStoreProxyAdminTimelock;
                 }
@@ -183,10 +184,16 @@ contract StateRelayBase is BaseData {
             try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiver")) returns (address stateReceiver) {
                 if (stateReceiver != address(0)) stateReceiverOf[depChainId] = stateReceiver;
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdmin")) returns (address stateReceiverProxyAdmin) {
-                if (stateReceiverProxyAdmin != address(0)) stateReceiverProxyAdminOf[depChainId] = stateReceiverProxyAdmin;
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdmin")) returns (
+                address stateReceiverProxyAdmin
+            ) {
+                if (stateReceiverProxyAdmin != address(0)) {
+                    stateReceiverProxyAdminOf[depChainId] = stateReceiverProxyAdmin;
+                }
             } catch {}
-            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdminTimelock")) returns (address stateReceiverProxyAdminTimelock) {
+            try vm.parseJsonAddress(json, string.concat(cpre, ".stateReceiverProxyAdminTimelock")) returns (
+                address stateReceiverProxyAdminTimelock
+            ) {
                 if (stateReceiverProxyAdminTimelock != address(0)) {
                     stateReceiverProxyAdminTimelockOf[depChainId] = stateReceiverProxyAdminTimelock;
                 }
@@ -201,26 +208,36 @@ contract StateRelayBase is BaseData {
                 if (stateSender != address(0)) {
                     bytes32 slot = senderSlot(s.chainId, label);
                     stateSenderOf[slot] = stateSender;
-                    try vm.parseJsonAddress(json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdmin"))
-                    returns (address stateSenderProxyAdmin) {
+                    try vm.parseJsonAddress(
+                        json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdmin")
+                    ) returns (
+                        address stateSenderProxyAdmin
+                    ) {
                         if (stateSenderProxyAdmin != address(0)) stateSenderProxyAdminOf[slot] = stateSenderProxyAdmin;
                     } catch {}
                     try vm.parseJsonAddress(
-                        json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdminTimelock")
-                    ) returns (address stateSenderProxyAdminTimelock) {
+                        json,
+                        string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".proxyAdminTimelock")
+                    ) returns (
+                        address stateSenderProxyAdminTimelock
+                    ) {
                         if (stateSenderProxyAdminTimelock != address(0)) {
                             stateSenderProxyAdminTimelockOf[slot] = stateSenderProxyAdminTimelock;
                         }
                     } catch {}
                     try vm.parseJsonAddress(
                         json, string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transport")
-                    ) returns (address stateSenderTransport) {
+                    ) returns (
+                        address stateSenderTransport
+                    ) {
                         if (stateSenderTransport != address(0)) stateSenderTransportOf[slot] = stateSenderTransport;
                     } catch {}
                     try vm.parseJsonAddress(
                         json,
                         string.concat(".chains.", vm.toString(s.chainId), ".senders.", label, ".transportProxyAdmin")
-                    ) returns (address stateSenderTransportProxyAdmin) {
+                    ) returns (
+                        address stateSenderTransportProxyAdmin
+                    ) {
                         if (stateSenderTransportProxyAdmin != address(0)) {
                             stateSenderTransportProxyAdminOf[slot] = stateSenderTransportProxyAdmin;
                         }
@@ -230,7 +247,9 @@ contract StateRelayBase is BaseData {
                         string.concat(
                             ".chains.", vm.toString(s.chainId), ".senders.", label, ".transportProxyAdminTimelock"
                         )
-                    ) returns (address stateSenderTransportProxyAdminTimelock) {
+                    ) returns (
+                        address stateSenderTransportProxyAdminTimelock
+                    ) {
                         if (stateSenderTransportProxyAdminTimelock != address(0)) {
                             stateSenderTransportProxyAdminTimelockOf[slot] = stateSenderTransportProxyAdminTimelock;
                         }

@@ -10,7 +10,7 @@ import {IRelayTransport} from "../interfaces/IRelayTransport.sol";
 /**
  * @title LayerZeroSenderTransport
  * @notice LayerZero-specific send adapter that maps application destination IDs onto LayerZero route configuration.
- * @notice NOTE: By convention, for EVM chains, destinationId is the chainId of the destination chain.  
+ * @notice NOTE: By convention, for EVM chains, destinationId is the chainId of the destination chain.
  */
 contract LayerZeroSenderTransport is OAppUpgradeable, AccessControlUpgradeable, IRelayTransport {
     string public constant VERSION = "0.1.0";

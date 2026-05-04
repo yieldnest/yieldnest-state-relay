@@ -127,7 +127,7 @@ contract StateSender is AccessControlUpgradeable, PausableUpgradeable {
     /**
      * @notice Quotes a relay send for a destination and returns the built payload metadata.
      * @param destinationId Application-level destination identifier understood by the transport.
-     * @dev NOTE: By convention, for EVM chains, destinationId is the chainId of the destination chain.  
+     * @dev NOTE: By convention, for EVM chains, destinationId is the chainId of the destination chain.
      * @return quoteData Transport quote, derived key, and encoded message for the send.
      */
     function quoteSendState(uint256 destinationId) public view returns (SendStateQuote memory quoteData) {

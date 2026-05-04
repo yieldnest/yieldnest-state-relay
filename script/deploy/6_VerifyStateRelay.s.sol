@@ -120,9 +120,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             return;
         }
 
-        if (
-            stateSenderTransportOf[slot] != address(0) && stateSenderTransportOf[slot] != stateSenderTransportAddress
-        ) {
+        if (stateSenderTransportOf[slot] != address(0) && stateSenderTransportOf[slot] != stateSenderTransportAddress) {
             _warn(
                 string.concat(
                     "Deployment JSON transport mismatch for sender ",
@@ -171,10 +169,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             stateReceiverProxyAdminTimelockOf[cid]
         );
         _verifyTransparentProxy(
-            "StateStore",
-            stateStoreAddress,
-            stateStoreProxyAdminOf[cid],
-            stateStoreProxyAdminTimelockOf[cid]
+            "StateStore", stateStoreAddress, stateStoreProxyAdminOf[cid], stateStoreProxyAdminTimelockOf[cid]
         );
 
         StateStore stateStore = StateStore(stateStoreAddress);
@@ -261,7 +256,10 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         if (configuredDestinationEid != expectedDestinationEid) {
             _requireStep(3, string.concat("Sender destination EID mismatch for ", label));
         }
-        if (configuredPeer != expectedReceiverPeer || senderTransport.peers(expectedDestinationEid) != expectedReceiverPeer) {
+        if (
+            configuredPeer != expectedReceiverPeer
+                || senderTransport.peers(expectedDestinationEid) != expectedReceiverPeer
+        ) {
             _requireStep(3, string.concat("Sender peer not configured to receiver for ", label));
         }
         if (keccak256(options) != keccak256(defaultSendOptions())) {
@@ -270,10 +268,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
 
         uint256[] memory destinationChainIds = _dstChainIdsForSender();
         _verifyLzConfig(
-            string.concat("StateSender transport [", label, "]"),
-            address(senderTransport),
-            destinationChainIds,
-            3
+            string.concat("StateSender transport [", label, "]"), address(senderTransport), destinationChainIds, 3
         );
     }
 
@@ -284,14 +279,18 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         for (uint256 i; i < remoteChainIds.length; i++) {
             uint32 remoteEid = getEID(remoteChainIds[i]);
             if (receiverOApp.peers(remoteEid) != remotePeers[i]) {
-                _requireStep(4, string.concat("Receiver peer mismatch for remote chain ", vm.toString(remoteChainIds[i])));
+                _requireStep(
+                    4, string.concat("Receiver peer mismatch for remote chain ", vm.toString(remoteChainIds[i]))
+                );
             }
         }
 
         _verifyLzConfig("StateReceiver", stateReceiverAddress, remoteChainIds, 4);
     }
 
-    function _verifyLzConfig(string memory componentName, address oapp, uint256[] memory otherChainIds, uint8 step) internal {
+    function _verifyLzConfig(string memory componentName, address oapp, uint256[] memory otherChainIds, uint8 step)
+        internal
+    {
         Data storage data = getData(block.chainid);
         ILayerZeroEndpointV2 lzEndpoint = ILayerZeroEndpointV2(data.LZ_ENDPOINT);
         bytes memory expectedUlnConfig = abi.encode(_getUlnConfig());
@@ -303,27 +302,37 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             uint32 eid = getEID(otherChainId);
 
             if (lzEndpoint.getSendLibrary(oapp, eid) != data.LZ_SEND_LIB) {
-                _requireStep(step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId)));
+                _requireStep(
+                    step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId))
+                );
             }
 
             (address receiveLibrary, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
             if (receiveLibrary != data.LZ_RECEIVE_LIB || isDefault) {
-                _requireStep(step, string.concat(componentName, " missing receive library for chain ", vm.toString(otherChainId)));
+                _requireStep(
+                    step, string.concat(componentName, " missing receive library for chain ", vm.toString(otherChainId))
+                );
             }
 
             if (
-                keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_ULN)) != keccak256(expectedUlnConfig)
+                keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_ULN))
+                        != keccak256(expectedUlnConfig)
                     || keccak256(lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, eid, CONFIG_TYPE_ULN))
                         != keccak256(expectedUlnConfig)
             ) {
-                _requireStep(step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId)));
+                _requireStep(
+                    step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId))
+                );
             }
 
             if (
                 keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_EXECUTOR))
                     != keccak256(expectedExecutorConfig)
             ) {
-                _requireStep(step, string.concat(componentName, " executor config mismatch for chain ", vm.toString(otherChainId)));
+                _requireStep(
+                    step,
+                    string.concat(componentName, " executor config mismatch for chain ", vm.toString(otherChainId))
+                );
             }
         }
 
