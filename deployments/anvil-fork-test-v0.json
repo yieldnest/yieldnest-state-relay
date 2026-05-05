@@ -1,0 +1,15 @@
+{
+  "chains": {
+    "1": {
+      "senders": {
+        "mainnet-ynethx-convertToAssets": {
+          "address": "0x92e092B5E18aeb5B6c951f0cCb20F49F97081757"
+        }
+      }
+    },
+    "42161": {
+      "stateStore": "0xbF093dF8993524FCdDA644381aB979c08d7B9407",
+      "stateReceiver": "0x1aDABe4941e0f662976DC94B9C7e2050b5445664"
+    }
+  }
+}

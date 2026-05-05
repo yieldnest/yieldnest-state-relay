@@ -1,0 +1,14 @@
+{
+  "name": "mainnet-xdc-ynrwax",
+  "version": "v0.1.0",
+  "deployer": "0x4C51Ce7B2546e18449fbE16738A8D55bc195a4dd",
+  "receiverChainId": 50,
+  "senders": {
+    "mainnet-ynrwax-convertToAssets": {
+      "chainId": 1,
+      "target": "0x01Ba69727E2860b37bc1a2bd56999c1aFb4C15D8",
+      "callData": "0x07a2d13a0000000000000000000000000000000000000000000000000de0b6b3a7640000",
+      "protocolVersion": 1
+    }
+  }
+}
