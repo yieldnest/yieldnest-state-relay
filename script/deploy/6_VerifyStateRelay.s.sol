@@ -13,6 +13,7 @@ import {LayerZeroReceiverTransport} from "../../src/layerzero/LayerZeroReceiverT
 import {IOAppCore} from "@layerzerolabs/oapp-evm/contracts/oapp/interfaces/IOAppCore.sol";
 import {ILayerZeroEndpointV2} from "@layerzerolabs/lz-evm-protocol-v2/contracts/interfaces/ILayerZeroEndpointV2.sol";
 import {ExecutorConfig} from "@layerzerolabs/lz-evm-messagelib-v2/contracts/SendLibBase.sol";
+import {UlnConfig} from "@layerzerolabs/lz-evm-messagelib-v2/contracts/uln/UlnBase.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {TimelockController} from "@openzeppelin/contracts/governance/TimelockController.sol";
 
@@ -286,52 +287,157 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         internal
     {
         Data storage data = getData(block.chainid);
-        ILayerZeroEndpointV2 lzEndpoint = ILayerZeroEndpointV2(data.LZ_ENDPOINT);
-        bytes memory expectedUlnConfig = abi.encode(_getUlnConfig());
+        UlnConfig memory expectedUlnConfig = _getUlnConfig();
+        bytes memory expectedUlnConfigEncoded = abi.encode(expectedUlnConfig);
         bytes memory expectedExecutorConfig =
             abi.encode(ExecutorConfig({maxMessageSize: DEFAULT_MAX_MESSAGE_SIZE, executor: data.LZ_EXECUTOR}));
 
         for (uint256 i; i < otherChainIds.length; i++) {
-            uint256 otherChainId = otherChainIds[i];
-            uint32 eid = getEID(otherChainId);
-
-            if (lzEndpoint.getSendLibrary(oapp, eid) != data.LZ_SEND_LIB) {
-                _requireStep(
-                    step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId))
-                );
-            }
-
-            (address receiveLibrary, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
-            if (receiveLibrary != data.LZ_RECEIVE_LIB || isDefault) {
-                _requireStep(
-                    step, string.concat(componentName, " missing receive library for chain ", vm.toString(otherChainId))
-                );
-            }
-
-            if (
-                keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_ULN))
-                        != keccak256(expectedUlnConfig)
-                    || keccak256(lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, eid, CONFIG_TYPE_ULN))
-                        != keccak256(expectedUlnConfig)
-            ) {
-                _requireStep(
-                    step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId))
-                );
-            }
-
-            if (
-                keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_EXECUTOR))
-                    != keccak256(expectedExecutorConfig)
-            ) {
-                _requireStep(
-                    step,
-                    string.concat(componentName, " executor config mismatch for chain ", vm.toString(otherChainId))
-                );
-            }
+            _verifyLzConfigForRemote(
+                componentName,
+                oapp,
+                otherChainIds[i],
+                step,
+                data,
+                expectedUlnConfigEncoded,
+                expectedExecutorConfig
+            );
         }
 
         if (ILZEndpointDelegates(data.LZ_ENDPOINT).delegates(oapp) != data.OFT_OWNER) {
             _requireStep(step, string.concat(componentName, " delegate is not OFT_OWNER"));
+        }
+    }
+
+    function _verifyLzConfigForRemote(
+        string memory componentName,
+        address oapp,
+        uint256 otherChainId,
+        uint8 step,
+        Data storage data,
+        bytes memory expectedUlnConfigEncoded,
+        bytes memory expectedExecutorConfig
+    ) internal {
+        ILayerZeroEndpointV2 lzEndpoint = ILayerZeroEndpointV2(data.LZ_ENDPOINT);
+        uint32 eid = getEID(otherChainId);
+        bytes memory sendUlnConfigBytes = lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_ULN);
+        bytes memory receiveUlnConfigBytes = lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, eid, CONFIG_TYPE_ULN);
+
+        if (lzEndpoint.getSendLibrary(oapp, eid) != data.LZ_SEND_LIB) {
+            _requireStep(step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId)));
+        }
+
+        (address receiveLibrary, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
+        if (receiveLibrary != data.LZ_RECEIVE_LIB || isDefault) {
+            _requireStep(
+                step, string.concat(componentName, " missing receive library for chain ", vm.toString(otherChainId))
+            );
+        }
+
+        if (
+            keccak256(sendUlnConfigBytes) != keccak256(expectedUlnConfigEncoded)
+                || keccak256(receiveUlnConfigBytes) != keccak256(expectedUlnConfigEncoded)
+        ) {
+            _requireStep(step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId)));
+        }
+
+        if (!isTestnetChainId(block.chainid)) {
+            _verifyExplicitMainnetUlnConfig(
+                componentName, abi.decode(sendUlnConfigBytes, (UlnConfig)), otherChainId, step, "send"
+            );
+            _verifyExplicitMainnetUlnConfig(
+                componentName, abi.decode(receiveUlnConfigBytes, (UlnConfig)), otherChainId, step, "receive"
+            );
+        }
+
+        if (
+            keccak256(lzEndpoint.getConfig(oapp, data.LZ_SEND_LIB, eid, CONFIG_TYPE_EXECUTOR))
+                != keccak256(expectedExecutorConfig)
+        ) {
+            _requireStep(
+                step, string.concat(componentName, " executor config mismatch for chain ", vm.toString(otherChainId))
+            );
+        }
+    }
+
+    function _verifyExplicitMainnetUlnConfig(
+        string memory componentName,
+        UlnConfig memory actualUlnConfig,
+        uint256 otherChainId,
+        uint8 step,
+        string memory direction
+    ) internal {
+        if (actualUlnConfig.requiredDVNs.length != 3) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN requiredDVNs length must be 3 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
+        }
+        if (actualUlnConfig.optionalDVNs.length != 0) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN optionalDVNs length must be 0 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
+        }
+        if (actualUlnConfig.requiredDVNCount != 3) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN requiredDVNCount must be 3 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
+        }
+        if (actualUlnConfig.optionalDVNCount != 0) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN optionalDVNCount must be 0 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
+        }
+        if (actualUlnConfig.optionalDVNThreshold != 0) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN optionalDVNThreshold must be 0 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
+        }
+        if (actualUlnConfig.confirmations != 32) {
+            _requireStep(
+                step,
+                string.concat(
+                    componentName,
+                    " ",
+                    direction,
+                    " ULN confirmations must be 32 for chain ",
+                    vm.toString(otherChainId)
+                )
+            );
         }
     }
 
