@@ -11,6 +11,14 @@
           "transportProxyAdminTimelock": "0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707"
         }
       }
+    },
+    "50": {
+      "stateStore": "0xe4A68709601F0d67d2333F6fEA0b9518eA25C897",
+      "stateStoreProxyAdmin": "0x63eFe570352523f8a0F2E6658Dc1907598248953",
+      "stateStoreProxyAdminTimelock": "0x200940DC5cE303Af2a53e13181CBCBAc96237a74",
+      "stateReceiver": "0xa031Dfe64aD016E3475007BEb6dbE632B83CDc01",
+      "stateReceiverProxyAdmin": "0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3",
+      "stateReceiverProxyAdminTimelock": "0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c"
     }
   }
 }
