@@ -95,7 +95,9 @@ contract TestRateAdapterTest is Test {
 
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         assertEq(zeroScaledAdapter.getRateScaled(), 0);
     }
@@ -123,11 +125,16 @@ contract TestRateAdapterTest is Test {
         rateAdapter.setBounds(2e18, 3e18);
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(1e18), uint256(2e18), uint256(3e18)
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector,
+                uint256(1e18),
+                uint256(2e18),
+                uint256(3e18)
             )
         );
         rateAdapter.getRate();
@@ -137,11 +144,16 @@ contract TestRateAdapterTest is Test {
         rateAdapter.setBounds(1e18, 2e18);
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(3e18), uint256(1e18), uint256(2e18)
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector,
+                uint256(3e18),
+                uint256(1e18),
+                uint256(2e18)
             )
         );
         rateAdapter.getRate();
@@ -151,11 +163,16 @@ contract TestRateAdapterTest is Test {
         rateAdapter.setBounds(1e18, 2e18);
         stateStore.write(
             rateKey,
-            StateStore.StateUpdate({value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+            StateStore.StateUpdate({
+                value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)
+            })
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(3e18), uint256(1e18), uint256(2e18)
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector,
+                uint256(3e18),
+                uint256(1e18),
+                uint256(2e18)
             )
         );
         rateAdapter.getRateScaled();

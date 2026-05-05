@@ -44,8 +44,7 @@ abstract contract AdapterScriptBase is StateRelayBase {
         }
 
         string memory json = vm.readFile(filePath);
-        string memory basePath =
-            string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label);
+        string memory basePath = string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label);
 
         try vm.parseJsonAddress(json, string.concat(basePath, ".address")) returns (address adapterAddress) {
             deployment.adapter = adapterAddress;
@@ -53,8 +52,9 @@ abstract contract AdapterScriptBase is StateRelayBase {
         try vm.parseJsonAddress(json, string.concat(basePath, ".proxyAdmin")) returns (address proxyAdmin) {
             deployment.proxyAdmin = proxyAdmin;
         } catch {}
-        try vm.parseJsonAddress(json, string.concat(basePath, ".proxyAdminTimelock")) returns (address proxyAdminTimelock)
-        {
+        try vm.parseJsonAddress(json, string.concat(basePath, ".proxyAdminTimelock")) returns (
+            address proxyAdminTimelock
+        ) {
             deployment.proxyAdminTimelock = proxyAdminTimelock;
         } catch {}
         try vm.parseJsonAddress(json, string.concat(basePath, ".stateStore")) returns (address stateStoreAddress) {
@@ -78,7 +78,9 @@ abstract contract AdapterScriptBase is StateRelayBase {
         try vm.parseJsonUint(json, string.concat(basePath, ".maxDstStaleness")) returns (uint256 maxDstStaleness) {
             deployment.maxDstStaleness = maxDstStaleness;
         } catch {}
-        try vm.parseJsonUint(json, string.concat(basePath, ".maxSourceTimestampSkew")) returns (uint256 maxSourceTimestampSkew) {
+        try vm.parseJsonUint(json, string.concat(basePath, ".maxSourceTimestampSkew")) returns (
+            uint256 maxSourceTimestampSkew
+        ) {
             deployment.maxSourceTimestampSkew = maxSourceTimestampSkew;
         } catch {}
     }

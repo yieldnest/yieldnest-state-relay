@@ -294,13 +294,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
 
         for (uint256 i; i < otherChainIds.length; i++) {
             _verifyLzConfigForRemote(
-                componentName,
-                oapp,
-                otherChainIds[i],
-                step,
-                data,
-                expectedUlnConfigEncoded,
-                expectedExecutorConfig
+                componentName, oapp, otherChainIds[i], step, data, expectedUlnConfigEncoded, expectedExecutorConfig
             );
         }
 
@@ -324,7 +318,9 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         bytes memory receiveUlnConfigBytes = lzEndpoint.getConfig(oapp, data.LZ_RECEIVE_LIB, eid, CONFIG_TYPE_ULN);
 
         if (lzEndpoint.getSendLibrary(oapp, eid) != data.LZ_SEND_LIB) {
-            _requireStep(step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId)));
+            _requireStep(
+                step, string.concat(componentName, " missing send library for chain ", vm.toString(otherChainId))
+            );
         }
 
         (address receiveLibrary, bool isDefault) = lzEndpoint.getReceiveLibrary(oapp, eid);
@@ -338,7 +334,9 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             keccak256(sendUlnConfigBytes) != keccak256(expectedUlnConfigEncoded)
                 || keccak256(receiveUlnConfigBytes) != keccak256(expectedUlnConfigEncoded)
         ) {
-            _requireStep(step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId)));
+            _requireStep(
+                step, string.concat(componentName, " ULN config mismatch for chain ", vm.toString(otherChainId))
+            );
         }
 
         if (!isTestnetChainId(block.chainid)) {
@@ -431,11 +429,7 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             _requireStep(
                 step,
                 string.concat(
-                    componentName,
-                    " ",
-                    direction,
-                    " ULN confirmations must be 32 for chain ",
-                    vm.toString(otherChainId)
+                    componentName, " ", direction, " ULN confirmations must be 32 for chain ", vm.toString(otherChainId)
                 )
             );
         }

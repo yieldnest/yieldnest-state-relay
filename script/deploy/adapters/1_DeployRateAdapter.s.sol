@@ -60,7 +60,11 @@ contract DeployRateAdapter is AdapterScriptBase {
         _logAndSaveRateAdapter(label, deployment);
     }
 
-    function _prepareDeploymentContext(string memory label) internal view returns (DeploymentContext memory deploymentContext) {
+    function _prepareDeploymentContext(string memory label)
+        internal
+        view
+        returns (DeploymentContext memory deploymentContext)
+    {
         SenderInput memory senderInput = _senderInputForLabel(label);
         deploymentContext.stateStoreAddress = stateStoreOf[receiverChainId];
         require(isContract(deploymentContext.stateStoreAddress), "StateRelay: destination state store not deployed");
@@ -87,18 +91,17 @@ contract DeployRateAdapter is AdapterScriptBase {
         adapterObject = vm.serializeUint(objectKey, "maxUpperBound", deployment.maxUpperBound);
         adapterObject = vm.serializeUint(objectKey, "maxSrcStaleness", deployment.maxSrcStaleness);
         adapterObject = vm.serializeUint(objectKey, "maxDstStaleness", deployment.maxDstStaleness);
-        adapterObject =
-            vm.serializeUint(objectKey, "maxSourceTimestampSkew", deployment.maxSourceTimestampSkew);
+        adapterObject = vm.serializeUint(objectKey, "maxSourceTimestampSkew", deployment.maxSourceTimestampSkew);
         string memory basePath = string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label);
         vm.writeJson(adapterObject, filePath, basePath);
 
         console.log("Wrote deployment to %s", filePath);
     }
 
-    function _deployRateAdapter(
-        address adapterOwner,
-        AdapterDeployment memory deployment
-    ) internal returns (address rateAdapterAddress, address rateAdapterProxyAdmin, address adapterTimelock) {
+    function _deployRateAdapter(address adapterOwner, AdapterDeployment memory deployment)
+        internal
+        returns (address rateAdapterAddress, address rateAdapterProxyAdmin, address adapterTimelock)
+    {
         _startBroadcast();
         adapterTimelock = _deployTimelockController(adapterOwner, PROXY_ADMIN_TIMELOCK_DELAY);
         RateAdapterUpgradeable adapterImplementation = new RateAdapterUpgradeable();
