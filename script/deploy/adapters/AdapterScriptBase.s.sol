@@ -11,6 +11,7 @@ abstract contract AdapterScriptBase is StateRelayBase {
         address proxyAdminTimelock;
         address stateStore;
         bytes32 rateKey;
+        uint256 scalingFactor;
         uint256 maxSrcStaleness;
         uint256 maxDstStaleness;
         uint256 maxSourceTimestampSkew;
@@ -59,6 +60,9 @@ abstract contract AdapterScriptBase is StateRelayBase {
         } catch {}
         try vm.parseJsonBytes32(json, string.concat(basePath, ".rateKey")) returns (bytes32 rateKey) {
             deployment.rateKey = rateKey;
+        } catch {}
+        try vm.parseJsonUint(json, string.concat(basePath, ".scalingFactor")) returns (uint256 scalingFactor) {
+            deployment.scalingFactor = scalingFactor;
         } catch {}
         try vm.parseJsonUint(json, string.concat(basePath, ".maxSrcStaleness")) returns (uint256 maxSrcStaleness) {
             deployment.maxSrcStaleness = maxSrcStaleness;

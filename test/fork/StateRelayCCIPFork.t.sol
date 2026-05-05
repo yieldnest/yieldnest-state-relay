@@ -220,7 +220,7 @@ contract StateRelayCCIPFork is Test, StateRelayCCIPForkConstants {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(this), stateStore_, key, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+            (address(this), stateStore_, key, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, 1)
         );
         return RateAdapterUpgradeable(address(new ERC1967Proxy(address(adapterImpl), adapterInit)));
     }

@@ -73,6 +73,9 @@ contract VerifyRateAdapter is AdapterScriptBase {
         if (deployment.rateKey != bytes32(0) && deployment.rateKey != expectedRateKey) {
             _warn("Adapter deployment JSON rateKey does not match derived relay key");
         }
+        if (rateAdapter.scalingFactor() != deployment.scalingFactor) {
+            _require("RateAdapter scalingFactor does not match adapter deployment JSON");
+        }
         if (rateAdapter.maxSrcStaleness() != deployment.maxSrcStaleness) {
             _require("RateAdapter maxSrcStaleness does not match adapter deployment JSON");
         }

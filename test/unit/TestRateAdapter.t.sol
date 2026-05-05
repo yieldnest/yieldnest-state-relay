@@ -11,6 +11,7 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 
 contract TestRateAdapterTest is Test {
     uint256 constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
+    uint256 constant SCALING_FACTOR = 1e12;
     StateStore public stateStore;
     RateAdapterUpgradeable public rateAdapter;
     bytes32 public rateKey;
@@ -27,7 +28,7 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(this), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+            (address(this), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         rateAdapter = RateAdapterUpgradeable(address(adapterProxy));
@@ -50,6 +51,31 @@ contract TestRateAdapterTest is Test {
             StateStore.StateUpdate({value: abi.encode(rate), version: 1, srcTimestamp: uint64(block.timestamp)})
         );
         assertEq(rateAdapter.getRate(), rate);
+    }
+
+    function test_getRateScaled_returnsScaledUint256() public {
+        uint256 rate = 1e18;
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({value: abi.encode(rate), version: 1, srcTimestamp: uint64(block.timestamp)})
+        );
+        assertEq(rateAdapter.getRateScaled(), rate * SCALING_FACTOR);
+    }
+
+    function test_getRateScaled_zeroScalingFactor_returnsZero() public {
+        RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
+        bytes memory adapterInit = abi.encodeCall(
+            RateAdapterUpgradeable.initialize,
+            (address(this), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, 0)
+        );
+        ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
+        RateAdapterUpgradeable zeroScaledAdapter = RateAdapterUpgradeable(address(adapterProxy));
+
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+        );
+        assertEq(zeroScaledAdapter.getRateScaled(), 0);
     }
 
     function test_getRate_decodesDifferentRates() public {
@@ -134,6 +160,7 @@ contract TestRateAdapterTest is Test {
         assertEq(rateAdapter.maxSrcStaleness(), STALENESS);
         assertEq(rateAdapter.maxDstStaleness(), STALENESS);
         assertEq(rateAdapter.maxSourceTimestampSkew(), MAX_SOURCE_TIMESTAMP_SKEW);
+        assertEq(rateAdapter.scalingFactor(), SCALING_FACTOR);
     }
 
     function test_initialize_grantsReaderAdminAndManagerRoles() public view {
@@ -148,7 +175,7 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (admin, address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+            (admin, address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         RateAdapterUpgradeable adapter = RateAdapterUpgradeable(address(adapterProxy));
@@ -166,7 +193,7 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(0), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW)
+            (address(0), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
         );
 
         vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_ZeroAddress.selector);

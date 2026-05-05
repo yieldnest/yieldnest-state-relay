@@ -22,6 +22,7 @@ contract DeployRateAdapter is AdapterScriptBase {
         string calldata inputPath,
         string calldata deploymentPath,
         string calldata label,
+        uint256 scalingFactor,
         uint256 maxSrcStaleness,
         uint256 maxDstStaleness,
         uint256 maxSourceTimestampSkew
@@ -45,6 +46,7 @@ contract DeployRateAdapter is AdapterScriptBase {
             deploymentContext.adapterOwner,
             deploymentContext.stateStoreAddress,
             deploymentContext.rateKey,
+            scalingFactor,
             maxSrcStaleness,
             maxDstStaleness,
             maxSourceTimestampSkew
@@ -56,6 +58,7 @@ contract DeployRateAdapter is AdapterScriptBase {
         deployment.proxyAdminTimelock = adapterTimelock;
         deployment.stateStore = deploymentContext.stateStoreAddress;
         deployment.rateKey = deploymentContext.rateKey;
+        deployment.scalingFactor = scalingFactor;
         deployment.maxSrcStaleness = maxSrcStaleness;
         deployment.maxDstStaleness = maxDstStaleness;
         deployment.maxSourceTimestampSkew = maxSourceTimestampSkew;
@@ -85,6 +88,7 @@ contract DeployRateAdapter is AdapterScriptBase {
         adapterObject = vm.serializeAddress(objectKey, "proxyAdminTimelock", deployment.proxyAdminTimelock);
         adapterObject = vm.serializeAddress(objectKey, "stateStore", deployment.stateStore);
         adapterObject = vm.serializeBytes32(objectKey, "rateKey", deployment.rateKey);
+        adapterObject = vm.serializeUint(objectKey, "scalingFactor", deployment.scalingFactor);
         adapterObject = vm.serializeUint(objectKey, "maxSrcStaleness", deployment.maxSrcStaleness);
         adapterObject = vm.serializeUint(objectKey, "maxDstStaleness", deployment.maxDstStaleness);
         adapterObject =
@@ -99,6 +103,7 @@ contract DeployRateAdapter is AdapterScriptBase {
         address adapterOwner,
         address stateStoreAddress,
         bytes32 rateKey,
+        uint256 scalingFactor,
         uint256 maxSrcStaleness,
         uint256 maxDstStaleness,
         uint256 maxSourceTimestampSkew
@@ -114,7 +119,8 @@ contract DeployRateAdapter is AdapterScriptBase {
                 rateKey,
                 maxSrcStaleness,
                 maxDstStaleness,
-                maxSourceTimestampSkew
+                maxSourceTimestampSkew,
+                scalingFactor
             )
         );
         TransparentUpgradeableProxy adapterProxy =
@@ -136,6 +142,8 @@ contract DeployRateAdapter is AdapterScriptBase {
         console.logAddress(deployment.stateStore);
         console.log("RateAdapter [%s] rateKey:", label);
         console.logBytes32(deployment.rateKey);
+        console.log("RateAdapter [%s] scalingFactor:", label);
+        console.logUint(deployment.scalingFactor);
         console.log("RateAdapter [%s] maxSrcStaleness:", label);
         console.logUint(deployment.maxSrcStaleness);
         console.log("RateAdapter [%s] maxDstStaleness:", label);
