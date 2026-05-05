@@ -24,6 +24,8 @@ interface ILZEndpointDelegates {
 /// @notice Verifies the current per-chain relay deployment and prints the remaining rollout steps.
 /// @dev Run once per chain RPC after any deploy/config step.
 contract VerifyStateRelay is StateRelayLzConfigure {
+    error VerifyStateRelay_CriticalMisconfiguration(string message);
+
     string[] internal remainingActions;
     string[] internal warnings;
 
@@ -88,24 +90,20 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         );
 
         StateSender stateSender = StateSender(stateSenderAddress);
-        _requireRole(
+        _requireCriticalRole(
             stateSender.hasRole(stateSender.DEFAULT_ADMIN_ROLE(), expectedOwner),
-            0,
             string.concat("StateSender [", label, "] missing DEFAULT_ADMIN_ROLE for OFT_OWNER")
         );
-        _requireRole(
+        _requireCriticalRole(
             stateSender.hasRole(stateSender.CONFIG_MANAGER_ROLE(), expectedOwner),
-            0,
             string.concat("StateSender [", label, "] missing CONFIG_MANAGER_ROLE for OFT_OWNER")
         );
-        _requireRole(
+        _requireCriticalRole(
             stateSender.hasRole(stateSender.TRANSPORT_MANAGER_ROLE(), expectedOwner),
-            0,
             string.concat("StateSender [", label, "] missing TRANSPORT_MANAGER_ROLE for OFT_OWNER")
         );
-        _requireRole(
+        _requireCriticalRole(
             stateSender.hasRole(stateSender.PAUSER_ROLE(), expectedOwner),
-            0,
             string.concat("StateSender [", label, "] missing PAUSER_ROLE for OFT_OWNER")
         );
 
@@ -170,24 +168,20 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         StateStore stateStore = StateStore(stateStoreAddress);
         LayerZeroReceiverTransport stateReceiver = LayerZeroReceiverTransport(stateReceiverAddress);
 
-        _requireRole(
+        _requireCriticalRole(
             stateStore.hasRole(stateStore.DEFAULT_ADMIN_ROLE(), expectedOwner),
-            0,
             "StateStore missing DEFAULT_ADMIN_ROLE for OFT_OWNER"
         );
-        _requireRole(
+        _requireCriticalRole(
             stateStore.hasRole(stateStore.VERSION_MANAGER_ROLE(), expectedOwner),
-            0,
             "StateStore missing VERSION_MANAGER_ROLE for OFT_OWNER"
         );
-        _requireRole(
+        _requireCriticalRole(
             stateStore.hasRole(stateStore.WRITER_MANAGER_ROLE(), expectedOwner),
-            0,
             "StateStore missing WRITER_MANAGER_ROLE for OFT_OWNER"
         );
-        _requireRole(
+        _requireCriticalRole(
             stateStore.hasRole(stateStore.PAUSER_ROLE(), expectedOwner),
-            0,
             "StateStore missing PAUSER_ROLE for OFT_OWNER"
         );
 
@@ -216,6 +210,23 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         if (!senderTransport.hasRole(senderTransport.CONFIG_MANAGER_ROLE(), expectedOwner)) {
             _requireStep(5, string.concat("Sender transport missing CONFIG_MANAGER_ROLE for OFT_OWNER on ", label));
         }
+        if (
+            relayDeployer != expectedOwner && senderTransport.owner() == relayDeployer
+        ) {
+            _requireStep(5, string.concat("Sender transport ownership still held by deployer for ", label));
+        }
+        if (
+            relayDeployer != expectedOwner
+                && senderTransport.hasRole(senderTransport.DEFAULT_ADMIN_ROLE(), relayDeployer)
+        ) {
+            _requireStep(5, string.concat("Sender transport deployer still has DEFAULT_ADMIN_ROLE on ", label));
+        }
+        if (
+            relayDeployer != expectedOwner
+                && senderTransport.hasRole(senderTransport.CONFIG_MANAGER_ROLE(), relayDeployer)
+        ) {
+            _requireStep(5, string.concat("Sender transport deployer still has CONFIG_MANAGER_ROLE on ", label));
+        }
     }
 
     function _verifyReceiverControl(LayerZeroReceiverTransport stateReceiver, address expectedOwner) internal {
@@ -230,6 +241,23 @@ contract VerifyStateRelay is StateRelayLzConfigure {
         }
         if (!stateReceiver.hasRole(stateReceiver.STATE_STORE_MANAGER_ROLE(), expectedOwner)) {
             _requireStep(5, "StateReceiver missing STATE_STORE_MANAGER_ROLE for OFT_OWNER");
+        }
+        if (relayDeployer != expectedOwner && stateReceiver.owner() == relayDeployer) {
+            _requireStep(5, "StateReceiver ownership still held by deployer");
+        }
+        if (
+            relayDeployer != expectedOwner && stateReceiver.hasRole(stateReceiver.DEFAULT_ADMIN_ROLE(), relayDeployer)
+        ) {
+            _requireStep(5, "StateReceiver deployer still has DEFAULT_ADMIN_ROLE");
+        }
+        if (relayDeployer != expectedOwner && stateReceiver.hasRole(stateReceiver.PAUSER_ROLE(), relayDeployer)) {
+            _requireStep(5, "StateReceiver deployer still has PAUSER_ROLE");
+        }
+        if (
+            relayDeployer != expectedOwner
+                && stateReceiver.hasRole(stateReceiver.STATE_STORE_MANAGER_ROLE(), relayDeployer)
+        ) {
+            _requireStep(5, "StateReceiver deployer still has STATE_STORE_MANAGER_ROLE");
         }
     }
 
@@ -505,6 +533,11 @@ contract VerifyStateRelay is StateRelayLzConfigure {
             _requireStep(step, message);
         }
     }
+
+    function _requireCriticalRole(bool ok, string memory message) internal pure {
+        if (!ok) revert VerifyStateRelay_CriticalMisconfiguration(message);
+    }
+
 
     function _requireStep(uint8 step, string memory message) internal {
         if (step == 1) needsStep1 = true;
