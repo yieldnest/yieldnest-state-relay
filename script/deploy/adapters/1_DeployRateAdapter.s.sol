@@ -4,14 +4,20 @@ pragma solidity ^0.8.22;
 
 import {console} from "forge-std/console.sol";
 
-import {StateRelayBase} from "../../StateRelayBase.s.sol";
 import {KeyDerivation} from "../../../src/KeyDerivation.sol";
 import {RateAdapterUpgradeable} from "../../../src/adapter/RateAdapterUpgradeable.sol";
 import {TransparentUpgradeableProxy} from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
+import {AdapterScriptBase} from "./AdapterScriptBase.s.sol";
 
 /// @notice Deploys a RateAdapterUpgradeable for a sender label on the receiver chain.
 /// @dev Persists the adapter under `.chains.<receiverChainId>.rateAdapters.<label>` in the deployment JSON.
-contract DeployRateAdapter is StateRelayBase {
+contract DeployRateAdapter is AdapterScriptBase {
+    struct DeploymentContext {
+        address stateStoreAddress;
+        bytes32 rateKey;
+        address adapterOwner;
+    }
+
     function run(
         string calldata inputPath,
         string calldata deploymentPath,
@@ -26,82 +32,65 @@ contract DeployRateAdapter is StateRelayBase {
 
         require(block.chainid == receiverChainId, "StateRelay: rate adapter deploy only on receiver chain RPC");
 
-        SenderInput memory senderInput = _senderInputForLabel(label);
-        address stateStoreAddress = stateStoreOf[receiverChainId];
-        require(isContract(stateStoreAddress), "StateRelay: destination state store not deployed");
-
-        address existingAdapter = _existingRateAdapter(label);
-        if (isContract(existingAdapter)) {
+        AdapterDeployment memory existingDeployment = _loadAdapterDeployment(label);
+        if (isContract(existingDeployment.adapter)) {
             console.log("RateAdapter [%s] already at:", label);
-            console.logAddress(existingAdapter);
+            console.logAddress(existingDeployment.adapter);
             return;
         }
 
-        bytes32 rateKey = KeyDerivation.deriveKey(senderInput.chainId, senderInput.target, senderInput.callData);
-        address adapterOwner = getData(receiverChainId).OFT_OWNER;
+        DeploymentContext memory deploymentContext = _prepareDeploymentContext(label);
 
         (address rateAdapterAddress, address rateAdapterProxyAdmin, address adapterTimelock) = _deployRateAdapter(
-            adapterOwner,
-            stateStoreAddress,
-            rateKey,
+            deploymentContext.adapterOwner,
+            deploymentContext.stateStoreAddress,
+            deploymentContext.rateKey,
             maxSrcStaleness,
             maxDstStaleness,
             maxSourceTimestampSkew
         );
 
-        _logAndSaveRateAdapter(label, rateAdapterAddress, rateAdapterProxyAdmin, adapterTimelock, stateStoreAddress, rateKey);
+        AdapterDeployment memory deployment;
+        deployment.adapter = rateAdapterAddress;
+        deployment.proxyAdmin = rateAdapterProxyAdmin;
+        deployment.proxyAdminTimelock = adapterTimelock;
+        deployment.stateStore = deploymentContext.stateStoreAddress;
+        deployment.rateKey = deploymentContext.rateKey;
+        deployment.maxSrcStaleness = maxSrcStaleness;
+        deployment.maxDstStaleness = maxDstStaleness;
+        deployment.maxSourceTimestampSkew = maxSourceTimestampSkew;
+
+        _logAndSaveRateAdapter(label, deployment);
     }
 
-    function _senderInputForLabel(string memory label) internal view returns (SenderInput memory senderInput) {
-        bytes32 expectedLabelHash = keccak256(bytes(label));
-        for (uint256 i; i < senderLabels.length; i++) {
-            if (keccak256(bytes(senderLabels[i])) == expectedLabelHash) {
-                return senderByLabel[senderLabels[i]];
-            }
-        }
-        revert("StateRelay: unknown sender label");
+    function _prepareDeploymentContext(string memory label) internal view returns (DeploymentContext memory deploymentContext) {
+        SenderInput memory senderInput = _senderInputForLabel(label);
+        deploymentContext.stateStoreAddress = stateStoreOf[receiverChainId];
+        require(isContract(deploymentContext.stateStoreAddress), "StateRelay: destination state store not deployed");
+        deploymentContext.rateKey =
+            KeyDerivation.deriveKey(senderInput.chainId, senderInput.target, senderInput.callData);
+        deploymentContext.adapterOwner = getData(receiverChainId).OFT_OWNER;
     }
 
-    function _existingRateAdapter(string memory label) internal view returns (address rateAdapterAddress) {
-        string memory filePath = deploymentFilePath();
-        if (!vm.isFile(filePath)) {
-            return address(0);
-        }
-
-        string memory json = vm.readFile(filePath);
-        string memory path =
-            string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label, ".address");
-        try vm.parseJsonAddress(json, path) returns (address parsedAddress) {
-            return parsedAddress;
-        } catch {
-            return address(0);
-        }
-    }
-
-    function _saveRateAdapterDeployment(
-        string memory label,
-        address rateAdapterAddress,
-        address rateAdapterProxyAdmin,
-        address rateAdapterProxyAdminTimelock,
-        address stateStoreAddress,
-        bytes32 rateKey
-    ) internal {
-        string memory filePath = deploymentFilePath();
+    function _saveRateAdapterDeployment(string memory label, AdapterDeployment memory deployment) internal {
+        _ensureAdapterDeploymentDir();
+        string memory filePath = adapterDeploymentFilePath();
         if (!vm.isFile(filePath)) {
             vm.writeJson("{\"chains\":{}}", filePath);
         }
 
         string memory objectKey = string.concat("rateAdapter_", vm.toString(receiverChainId), "_", label);
-        string memory adapterObject = vm.serializeAddress(objectKey, "address", rateAdapterAddress);
-        adapterObject = vm.serializeAddress(objectKey, "proxyAdmin", rateAdapterProxyAdmin);
-        adapterObject = vm.serializeAddress(objectKey, "proxyAdminTimelock", rateAdapterProxyAdminTimelock);
-        adapterObject = vm.serializeAddress(objectKey, "stateStore", stateStoreAddress);
-        adapterObject = vm.serializeBytes32(objectKey, "rateKey", rateKey);
-        vm.writeJson(
-            adapterObject,
-            filePath,
-            string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label)
-        );
+        string memory adapterObject = vm.serializeAddress(objectKey, "address", deployment.adapter);
+        adapterObject = vm.serializeAddress(objectKey, "proxyAdmin", deployment.proxyAdmin);
+        adapterObject = vm.serializeAddress(objectKey, "proxyAdminTimelock", deployment.proxyAdminTimelock);
+        adapterObject = vm.serializeAddress(objectKey, "stateStore", deployment.stateStore);
+        adapterObject = vm.serializeBytes32(objectKey, "rateKey", deployment.rateKey);
+        adapterObject = vm.serializeUint(objectKey, "maxSrcStaleness", deployment.maxSrcStaleness);
+        adapterObject = vm.serializeUint(objectKey, "maxDstStaleness", deployment.maxDstStaleness);
+        adapterObject =
+            vm.serializeUint(objectKey, "maxSourceTimestampSkew", deployment.maxSourceTimestampSkew);
+        string memory basePath = string.concat(".chains.", vm.toString(receiverChainId), ".rateAdapters.", label);
+        vm.writeJson(adapterObject, filePath, basePath);
 
         console.log("Wrote deployment to %s", filePath);
     }
@@ -136,32 +125,24 @@ contract DeployRateAdapter is StateRelayBase {
         rateAdapterProxyAdmin = _proxyAdminOf(rateAdapterAddress);
     }
 
-    function _logAndSaveRateAdapter(
-        string memory label,
-        address rateAdapterAddress,
-        address rateAdapterProxyAdmin,
-        address rateAdapterProxyAdminTimelock,
-        address stateStoreAddress,
-        bytes32 rateKey
-    ) internal {
+    function _logAndSaveRateAdapter(string memory label, AdapterDeployment memory deployment) internal {
         console.log("RateAdapter [%s] proxy:", label);
-        console.logAddress(rateAdapterAddress);
+        console.logAddress(deployment.adapter);
         console.log("RateAdapter [%s] proxy admin:", label);
-        console.logAddress(rateAdapterProxyAdmin);
+        console.logAddress(deployment.proxyAdmin);
         console.log("RateAdapter [%s] proxy admin timelock:", label);
-        console.logAddress(rateAdapterProxyAdminTimelock);
+        console.logAddress(deployment.proxyAdminTimelock);
         console.log("RateAdapter [%s] stateStore:", label);
-        console.logAddress(stateStoreAddress);
+        console.logAddress(deployment.stateStore);
         console.log("RateAdapter [%s] rateKey:", label);
-        console.logBytes32(rateKey);
+        console.logBytes32(deployment.rateKey);
+        console.log("RateAdapter [%s] maxSrcStaleness:", label);
+        console.logUint(deployment.maxSrcStaleness);
+        console.log("RateAdapter [%s] maxDstStaleness:", label);
+        console.logUint(deployment.maxDstStaleness);
+        console.log("RateAdapter [%s] maxSourceTimestampSkew:", label);
+        console.logUint(deployment.maxSourceTimestampSkew);
 
-        _saveRateAdapterDeployment(
-            label,
-            rateAdapterAddress,
-            rateAdapterProxyAdmin,
-            rateAdapterProxyAdminTimelock,
-            stateStoreAddress,
-            rateKey
-        );
+        _saveRateAdapterDeployment(label, deployment);
     }
 }
