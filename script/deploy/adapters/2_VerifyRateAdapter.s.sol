@@ -76,6 +76,12 @@ contract VerifyRateAdapter is AdapterScriptBase {
         if (rateAdapter.scalingFactor() != deployment.scalingFactor) {
             _require("RateAdapter scalingFactor does not match adapter deployment JSON");
         }
+        if (rateAdapter.minLowerBound() != deployment.minLowerBound) {
+            _require("RateAdapter minLowerBound does not match adapter deployment JSON");
+        }
+        if (rateAdapter.maxUpperBound() != deployment.maxUpperBound) {
+            _require("RateAdapter maxUpperBound does not match adapter deployment JSON");
+        }
         if (rateAdapter.maxSrcStaleness() != deployment.maxSrcStaleness) {
             _require("RateAdapter maxSrcStaleness does not match adapter deployment JSON");
         }

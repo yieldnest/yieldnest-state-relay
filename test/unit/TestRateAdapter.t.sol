@@ -12,6 +12,8 @@ import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.s
 contract TestRateAdapterTest is Test {
     uint256 constant MAX_SOURCE_TIMESTAMP_SKEW = 1 hours;
     uint256 constant SCALING_FACTOR = 1e12;
+    uint256 constant MIN_LOWER_BOUND = 1;
+    uint256 constant MAX_UPPER_BOUND = type(uint256).max;
     StateStore public stateStore;
     RateAdapterUpgradeable public rateAdapter;
     bytes32 public rateKey;
@@ -28,7 +30,17 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(this), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
+            (
+                address(this),
+                address(stateStore),
+                rateKey,
+                STALENESS,
+                STALENESS,
+                MAX_SOURCE_TIMESTAMP_SKEW,
+                SCALING_FACTOR,
+                MIN_LOWER_BOUND,
+                MAX_UPPER_BOUND
+            )
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         rateAdapter = RateAdapterUpgradeable(address(adapterProxy));
@@ -66,7 +78,17 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(this), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, 0)
+            (
+                address(this),
+                address(stateStore),
+                rateKey,
+                STALENESS,
+                STALENESS,
+                MAX_SOURCE_TIMESTAMP_SKEW,
+                0,
+                MIN_LOWER_BOUND,
+                MAX_UPPER_BOUND
+            )
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         RateAdapterUpgradeable zeroScaledAdapter = RateAdapterUpgradeable(address(adapterProxy));
@@ -95,6 +117,48 @@ contract TestRateAdapterTest is Test {
             })
         );
         assertEq(rateAdapter.getRate(), 99e6);
+    }
+
+    function test_getRate_belowLowerBound_reverts() public {
+        rateAdapter.setBounds(2e18, 3e18);
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({value: abi.encode(uint256(1e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(1e18), uint256(2e18), uint256(3e18)
+            )
+        );
+        rateAdapter.getRate();
+    }
+
+    function test_getRate_aboveUpperBound_reverts() public {
+        rateAdapter.setBounds(1e18, 2e18);
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(3e18), uint256(1e18), uint256(2e18)
+            )
+        );
+        rateAdapter.getRate();
+    }
+
+    function test_getRateScaled_outOfBounds_reverts() public {
+        rateAdapter.setBounds(1e18, 2e18);
+        stateStore.write(
+            rateKey,
+            StateStore.StateUpdate({value: abi.encode(uint256(3e18)), version: 1, srcTimestamp: uint64(block.timestamp)})
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                RateAdapterUpgradeable.RateAdapterUpgradeable_RateOutOfBounds.selector, uint256(3e18), uint256(1e18), uint256(2e18)
+            )
+        );
+        rateAdapter.getRateScaled();
     }
 
     // --- StateReaderBaseUpgradeable: staleness checks ---
@@ -161,6 +225,8 @@ contract TestRateAdapterTest is Test {
         assertEq(rateAdapter.maxDstStaleness(), STALENESS);
         assertEq(rateAdapter.maxSourceTimestampSkew(), MAX_SOURCE_TIMESTAMP_SKEW);
         assertEq(rateAdapter.scalingFactor(), SCALING_FACTOR);
+        assertEq(rateAdapter.minLowerBound(), MIN_LOWER_BOUND);
+        assertEq(rateAdapter.maxUpperBound(), MAX_UPPER_BOUND);
     }
 
     function test_initialize_grantsReaderAdminAndManagerRoles() public view {
@@ -175,7 +241,17 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (admin, address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
+            (
+                admin,
+                address(stateStore),
+                rateKey,
+                STALENESS,
+                STALENESS,
+                MAX_SOURCE_TIMESTAMP_SKEW,
+                SCALING_FACTOR,
+                MIN_LOWER_BOUND,
+                MAX_UPPER_BOUND
+            )
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         RateAdapterUpgradeable adapter = RateAdapterUpgradeable(address(adapterProxy));
@@ -193,7 +269,17 @@ contract TestRateAdapterTest is Test {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(0), address(stateStore), rateKey, STALENESS, STALENESS, MAX_SOURCE_TIMESTAMP_SKEW, SCALING_FACTOR)
+            (
+                address(0),
+                address(stateStore),
+                rateKey,
+                STALENESS,
+                STALENESS,
+                MAX_SOURCE_TIMESTAMP_SKEW,
+                SCALING_FACTOR,
+                MIN_LOWER_BOUND,
+                MAX_UPPER_BOUND
+            )
         );
 
         vm.expectRevert(StateReaderBaseUpgradeable.StateReaderBaseUpgradeable_ZeroAddress.selector);
@@ -205,16 +291,21 @@ contract TestRateAdapterTest is Test {
         uint256 newMaxSrcStaleness = 2 hours;
         uint256 newMaxDstStaleness = 3 hours;
         uint256 newMaxSourceTimestampSkew = 4 hours;
+        uint256 newMinLowerBound = 5e17;
+        uint256 newMaxUpperBound = 5e18;
 
         rateAdapter.setStateKey(newRateKey);
         rateAdapter.setMaxSrcStaleness(newMaxSrcStaleness);
         rateAdapter.setMaxDstStaleness(newMaxDstStaleness);
         rateAdapter.setMaxSourceTimestampSkew(newMaxSourceTimestampSkew);
+        rateAdapter.setBounds(newMinLowerBound, newMaxUpperBound);
 
         assertEq(rateAdapter.rateKey(), newRateKey);
         assertEq(rateAdapter.maxSrcStaleness(), newMaxSrcStaleness);
         assertEq(rateAdapter.maxDstStaleness(), newMaxDstStaleness);
         assertEq(rateAdapter.maxSourceTimestampSkew(), newMaxSourceTimestampSkew);
+        assertEq(rateAdapter.minLowerBound(), newMinLowerBound);
+        assertEq(rateAdapter.maxUpperBound(), newMaxUpperBound);
 
         stateStore.write(
             newRateKey,
@@ -271,6 +362,16 @@ contract TestRateAdapterTest is Test {
         );
         vm.prank(unauthorized);
         rateAdapter.setMaxSourceTimestampSkew(MAX_SOURCE_TIMESTAMP_SKEW);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                unauthorized,
+                rateAdapter.CONFIG_MANAGER_ROLE()
+            )
+        );
+        vm.prank(unauthorized);
+        rateAdapter.setBounds(MIN_LOWER_BOUND, MAX_UPPER_BOUND);
     }
 
     function test_setStateStore_updatesStore() public {

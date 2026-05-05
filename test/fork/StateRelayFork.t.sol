@@ -52,7 +52,7 @@ abstract contract StateRelayForkAdapterHelpers is StateRelayForkConstants {
         RateAdapterUpgradeable adapterImpl = new RateAdapterUpgradeable();
         bytes memory adapterInit = abi.encodeCall(
             RateAdapterUpgradeable.initialize,
-            (address(this), stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew, 1)
+            (address(this), stateStore_, key, maxSrcStaleness, maxDstStaleness, maxSourceTimestampSkew, 1, 0, type(uint256).max)
         );
         ERC1967Proxy adapterProxy = new ERC1967Proxy(address(adapterImpl), adapterInit);
         return RateAdapterUpgradeable(address(adapterProxy));

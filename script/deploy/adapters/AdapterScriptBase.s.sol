@@ -12,6 +12,8 @@ abstract contract AdapterScriptBase is StateRelayBase {
         address stateStore;
         bytes32 rateKey;
         uint256 scalingFactor;
+        uint256 minLowerBound;
+        uint256 maxUpperBound;
         uint256 maxSrcStaleness;
         uint256 maxDstStaleness;
         uint256 maxSourceTimestampSkew;
@@ -63,6 +65,12 @@ abstract contract AdapterScriptBase is StateRelayBase {
         } catch {}
         try vm.parseJsonUint(json, string.concat(basePath, ".scalingFactor")) returns (uint256 scalingFactor) {
             deployment.scalingFactor = scalingFactor;
+        } catch {}
+        try vm.parseJsonUint(json, string.concat(basePath, ".minLowerBound")) returns (uint256 minLowerBound) {
+            deployment.minLowerBound = minLowerBound;
+        } catch {}
+        try vm.parseJsonUint(json, string.concat(basePath, ".maxUpperBound")) returns (uint256 maxUpperBound) {
+            deployment.maxUpperBound = maxUpperBound;
         } catch {}
         try vm.parseJsonUint(json, string.concat(basePath, ".maxSrcStaleness")) returns (uint256 maxSrcStaleness) {
             deployment.maxSrcStaleness = maxSrcStaleness;

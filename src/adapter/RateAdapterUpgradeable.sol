@@ -11,7 +11,15 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
     /// @custom:storage-location erc7201:yieldnest.storage.rate_adapter
     struct RateAdapterStorage {
         uint256 scalingFactor;
+        uint256 minLowerBound;
+        uint256 maxUpperBound;
     }
+
+    event BoundsSet(
+        uint256 previousMinLowerBound, uint256 previousMaxUpperBound, uint256 newMinLowerBound, uint256 newMaxUpperBound
+    );
+
+    error RateAdapterUpgradeable_RateOutOfBounds(uint256 rate, uint256 minLowerBound, uint256 maxUpperBound);
 
     /**
      * @notice Initializes the adapter to read a specific relayed rate key with freshness bounds.
@@ -22,6 +30,8 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @param _maxDstStaleness Maximum allowed age since delivery to the destination chain.
      * @param _maxSourceTimestampSkew Maximum allowed future skew for the source timestamp.
      * @param _scalingFactor Scalar used by `getRateScaled()`.
+     * @param _minLowerBound Minimum allowed decoded rate value.
+     * @param _maxUpperBound Maximum allowed decoded rate value.
      */
     function initialize(
         address _admin,
@@ -30,12 +40,17 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
         uint256 _maxSrcStaleness,
         uint256 _maxDstStaleness,
         uint256 _maxSourceTimestampSkew,
-        uint256 _scalingFactor
+        uint256 _scalingFactor,
+        uint256 _minLowerBound,
+        uint256 _maxUpperBound
     ) external initializer {
         __StateReaderBase_init(
             _admin, _stateStore, _rateKey, _maxSrcStaleness, _maxDstStaleness, _maxSourceTimestampSkew
         );
-        _getRateAdapterStorage().scalingFactor = _scalingFactor;
+        RateAdapterStorage storage $ = _getRateAdapterStorage();
+        $.scalingFactor = _scalingFactor;
+        $.minLowerBound = _minLowerBound;
+        $.maxUpperBound = _maxUpperBound;
     }
 
     /**
@@ -43,7 +58,7 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @return Current rate stored under the configured relay key.
      */
     function getRate() external view returns (uint256) {
-        return abi.decode(_getValue(), (uint256));
+        return _getBoundedRate();
     }
 
     /**
@@ -51,7 +66,20 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      * @return Scaled rate stored under the configured relay key.
      */
     function getRateScaled() external view returns (uint256) {
-        return abi.decode(_getValue(), (uint256)) * _getRateAdapterStorage().scalingFactor;
+        RateAdapterStorage storage $ = _getRateAdapterStorage();
+        return _getBoundedRate() * $.scalingFactor;
+    }
+
+    /**
+     * @notice Updates both rate bounds in a single call.
+     * @param _minLowerBound Minimum allowed decoded rate value.
+     * @param _maxUpperBound Maximum allowed decoded rate value.
+     */
+    function setBounds(uint256 _minLowerBound, uint256 _maxUpperBound) external onlyRole(CONFIG_MANAGER_ROLE) {
+        RateAdapterStorage storage $ = _getRateAdapterStorage();
+        emit BoundsSet($.minLowerBound, $.maxUpperBound, _minLowerBound, _maxUpperBound);
+        $.minLowerBound = _minLowerBound;
+        $.maxUpperBound = _maxUpperBound;
     }
 
     /**
@@ -68,6 +96,30 @@ contract RateAdapterUpgradeable is StateReaderBaseUpgradeable {
      */
     function scalingFactor() external view returns (uint256) {
         return _getRateAdapterStorage().scalingFactor;
+    }
+
+    /**
+     * @notice Returns the configured minimum allowed decoded rate value.
+     * @return Minimum allowed decoded rate value.
+     */
+    function minLowerBound() external view returns (uint256) {
+        return _getRateAdapterStorage().minLowerBound;
+    }
+
+    /**
+     * @notice Returns the configured maximum allowed decoded rate value.
+     * @return Maximum allowed decoded rate value.
+     */
+    function maxUpperBound() external view returns (uint256) {
+        return _getRateAdapterStorage().maxUpperBound;
+    }
+
+    function _getBoundedRate() internal view returns (uint256 rate) {
+        RateAdapterStorage storage $ = _getRateAdapterStorage();
+        rate = abi.decode(_getValue(), (uint256));
+        if (rate < $.minLowerBound || rate > $.maxUpperBound) {
+            revert RateAdapterUpgradeable_RateOutOfBounds(rate, $.minLowerBound, $.maxUpperBound);
+        }
     }
 
     function _getRateAdapterStorage() internal pure returns (RateAdapterStorage storage $) {

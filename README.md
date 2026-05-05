@@ -192,21 +192,27 @@ forge script --sig "run(string,string,string)" \
 Deploy a `RateAdapterUpgradeable` on the receiver chain for this relay key:
 
 ```bash
-forge script --sig "run(string,string,string,uint256,uint256,uint256)" \
+forge script --sig "run(string,string,string,uint256,uint256,uint256,uint256,uint256,uint256)" \
   --rpc-url "$XDC_RPC_URL" \
   --account "$ACCOUNT" \
   --sender "$DEPLOYER" \
   --broadcast \
   script/deploy/adapters/1_DeployRateAdapter.s.sol:DeployRateAdapter \
-  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets" 604800 604800 259200
+  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets" 1000000000000 900000 2000000 604800 604800 259200
 ```
 
-Those last three values are:
+Those six numeric values are:
+- `scalingFactor`
+- `minLowerBound`
+- `maxUpperBound`
 - `maxSrcStaleness`
 - `maxDstStaleness`
 - `maxSourceTimestampSkew`
 
 The command above uses:
+- `1000000000000` = `1e12` scaling factor
+- `900000` = `9e5`, the default lower bound
+- `2000000` = `2e6`, the default upper bound
 - `604800` = 7 days for source staleness
 - `604800` = 7 days for destination staleness
 - `259200` = 3 days for source timestamp skew

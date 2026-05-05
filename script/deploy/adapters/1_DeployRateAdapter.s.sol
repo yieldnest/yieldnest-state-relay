@@ -23,6 +23,8 @@ contract DeployRateAdapter is AdapterScriptBase {
         string calldata deploymentPath,
         string calldata label,
         uint256 scalingFactor,
+        uint256 minLowerBound,
+        uint256 maxUpperBound,
         uint256 maxSrcStaleness,
         uint256 maxDstStaleness,
         uint256 maxSourceTimestampSkew
@@ -42,26 +44,18 @@ contract DeployRateAdapter is AdapterScriptBase {
 
         DeploymentContext memory deploymentContext = _prepareDeploymentContext(label);
 
-        (address rateAdapterAddress, address rateAdapterProxyAdmin, address adapterTimelock) = _deployRateAdapter(
-            deploymentContext.adapterOwner,
-            deploymentContext.stateStoreAddress,
-            deploymentContext.rateKey,
-            scalingFactor,
-            maxSrcStaleness,
-            maxDstStaleness,
-            maxSourceTimestampSkew
-        );
-
         AdapterDeployment memory deployment;
-        deployment.adapter = rateAdapterAddress;
-        deployment.proxyAdmin = rateAdapterProxyAdmin;
-        deployment.proxyAdminTimelock = adapterTimelock;
         deployment.stateStore = deploymentContext.stateStoreAddress;
         deployment.rateKey = deploymentContext.rateKey;
         deployment.scalingFactor = scalingFactor;
+        deployment.minLowerBound = minLowerBound;
+        deployment.maxUpperBound = maxUpperBound;
         deployment.maxSrcStaleness = maxSrcStaleness;
         deployment.maxDstStaleness = maxDstStaleness;
         deployment.maxSourceTimestampSkew = maxSourceTimestampSkew;
+
+        (deployment.adapter, deployment.proxyAdmin, deployment.proxyAdminTimelock) =
+            _deployRateAdapter(deploymentContext.adapterOwner, deployment);
 
         _logAndSaveRateAdapter(label, deployment);
     }
@@ -89,6 +83,8 @@ contract DeployRateAdapter is AdapterScriptBase {
         adapterObject = vm.serializeAddress(objectKey, "stateStore", deployment.stateStore);
         adapterObject = vm.serializeBytes32(objectKey, "rateKey", deployment.rateKey);
         adapterObject = vm.serializeUint(objectKey, "scalingFactor", deployment.scalingFactor);
+        adapterObject = vm.serializeUint(objectKey, "minLowerBound", deployment.minLowerBound);
+        adapterObject = vm.serializeUint(objectKey, "maxUpperBound", deployment.maxUpperBound);
         adapterObject = vm.serializeUint(objectKey, "maxSrcStaleness", deployment.maxSrcStaleness);
         adapterObject = vm.serializeUint(objectKey, "maxDstStaleness", deployment.maxDstStaleness);
         adapterObject =
@@ -101,12 +97,7 @@ contract DeployRateAdapter is AdapterScriptBase {
 
     function _deployRateAdapter(
         address adapterOwner,
-        address stateStoreAddress,
-        bytes32 rateKey,
-        uint256 scalingFactor,
-        uint256 maxSrcStaleness,
-        uint256 maxDstStaleness,
-        uint256 maxSourceTimestampSkew
+        AdapterDeployment memory deployment
     ) internal returns (address rateAdapterAddress, address rateAdapterProxyAdmin, address adapterTimelock) {
         _startBroadcast();
         adapterTimelock = _deployTimelockController(adapterOwner, PROXY_ADMIN_TIMELOCK_DELAY);
@@ -115,12 +106,14 @@ contract DeployRateAdapter is AdapterScriptBase {
             RateAdapterUpgradeable.initialize,
             (
                 adapterOwner,
-                stateStoreAddress,
-                rateKey,
-                maxSrcStaleness,
-                maxDstStaleness,
-                maxSourceTimestampSkew,
-                scalingFactor
+                deployment.stateStore,
+                deployment.rateKey,
+                deployment.maxSrcStaleness,
+                deployment.maxDstStaleness,
+                deployment.maxSourceTimestampSkew,
+                deployment.scalingFactor,
+                deployment.minLowerBound,
+                deployment.maxUpperBound
             )
         );
         TransparentUpgradeableProxy adapterProxy =
@@ -144,6 +137,10 @@ contract DeployRateAdapter is AdapterScriptBase {
         console.logBytes32(deployment.rateKey);
         console.log("RateAdapter [%s] scalingFactor:", label);
         console.logUint(deployment.scalingFactor);
+        console.log("RateAdapter [%s] minLowerBound:", label);
+        console.logUint(deployment.minLowerBound);
+        console.log("RateAdapter [%s] maxUpperBound:", label);
+        console.logUint(deployment.maxUpperBound);
         console.log("RateAdapter [%s] maxSrcStaleness:", label);
         console.logUint(deployment.maxSrcStaleness);
         console.log("RateAdapter [%s] maxDstStaleness:", label);
