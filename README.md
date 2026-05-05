@@ -187,6 +187,42 @@ forge script --sig "run(string,string,string)" \
   script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets"
 ```
 
+### Rate adapter
+
+Deploy a `RateAdapterUpgradeable` on the receiver chain for this relay key:
+
+```bash
+forge script --sig "run(string,string,string,uint256,uint256,uint256)" \
+  --rpc-url "$XDC_RPC_URL" \
+  --account "$ACCOUNT" \
+  --sender "$DEPLOYER" \
+  --broadcast \
+  script/deploy/adapters/1_DeployRateAdapter.s.sol:DeployRateAdapter \
+  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets" 604800 604800 259200
+```
+
+Those last three values are:
+- `maxSrcStaleness`
+- `maxDstStaleness`
+- `maxSourceTimestampSkew`
+
+The command above uses:
+- `604800` = 7 days for source staleness
+- `604800` = 7 days for destination staleness
+- `259200` = 3 days for source timestamp skew
+
+Verify the deployed rate adapter on the receiver chain:
+
+```bash
+forge script --sig "run(string,string,string)" \
+  --rpc-url "$XDC_RPC_URL" \
+  script/deploy/adapters/2_VerifyRateAdapter.s.sol:VerifyRateAdapter \
+  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets"
+```
+
+Default adapter deployment artifact path:
+- `deployments/adapters/mainnet-xdc-ynrwax-v0.1.0.json`
+
 ## Peer configuration
 
 - Source chain: set peer `(dstEid, receiver transport proxy address)` on the sender transport for each destination.
