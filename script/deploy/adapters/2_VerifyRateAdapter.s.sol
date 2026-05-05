@@ -61,9 +61,7 @@ contract VerifyRateAdapter is AdapterScriptBase {
         if (!rateAdapter.hasRole(rateAdapter.STATE_STORE_MANAGER_ROLE(), expectedOwner)) {
             _require("RateAdapter missing STATE_STORE_MANAGER_ROLE for OFT_OWNER");
         }
-        if (
-            relayDeployer != expectedOwner && rateAdapter.hasRole(rateAdapter.DEFAULT_ADMIN_ROLE(), relayDeployer)
-        ) {
+        if (relayDeployer != expectedOwner && rateAdapter.hasRole(rateAdapter.DEFAULT_ADMIN_ROLE(), relayDeployer)) {
             _require("RateAdapter deployer still has DEFAULT_ADMIN_ROLE");
         }
         if (relayDeployer != expectedOwner && rateAdapter.hasRole(rateAdapter.CONFIG_MANAGER_ROLE(), relayDeployer)) {
