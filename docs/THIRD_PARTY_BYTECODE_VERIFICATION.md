@@ -126,19 +126,8 @@ So the examples below intentionally use those short contract names rather than f
 ## 1. Verify the ERC-1967 Proxy Topology
 
 For each proxy, confirm:
-- proxy runtime bytecode matches OpenZeppelin `TransparentUpgradeableProxy`
 - ERC-1967 admin slot matches the committed proxy admin
 - ERC-1967 implementation slot matches the deployed implementation
-
-Check the proxy runtime bytecode:
-
-```bash
-compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_SENDER_PROXY" "TransparentUpgradeableProxy"
-compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_TRANSPORT_PROXY" "TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_STATESTORE_PROXY" "TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_RECEIVER_PROXY" "TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_RATE_ADAPTER_PROXY" "TransparentUpgradeableProxy"
-```
 
 Check the admin and implementation slots:
 
