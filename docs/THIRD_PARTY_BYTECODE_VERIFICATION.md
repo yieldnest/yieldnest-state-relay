@@ -2,11 +2,11 @@
 
 This guide explains how an independent third party can verify the deployed contracts committed on the current branch.
 
-It covers:
-- verifying the deployment topology
-- verifying proxy/admin/timelock wiring
-- verifying on-chain runtime bytecode against locally built artifacts
-- verifying the LayerZero transport implementations and proxies with exact constructor arguments
+It covers only bytecode verification:
+- verifying proxy runtime bytecode
+- locating implementations through ERC-1967 slots
+- verifying implementation runtime bytecode
+- verifying contracts with constructor immutables using exact constructor arguments
 
 This guide is for the committed relay deployment artifacts:
 - [deployments/mainnet-xdc-ynrwax-v0.1.0.json](/home/claudeuser/source/yieldnest-state-relay/deployments/mainnet-xdc-ynrwax-v0.1.0.json)
@@ -171,11 +171,10 @@ XDC rate adapter proxy admin      0xC7Ffca6D884c4b447E321496af1a0bc550d315e2
 XDC rate adapter proxy impl       0x0f4398aDFa8Fc8451F262E6180Ee697bc4Ba7a90
 ```
 
-## 2. Verify ProxyAdmin Contracts
+## 2. Verify ProxyAdmin Bytecode
 
 Each TransparentUpgradeableProxy deploys a dedicated `ProxyAdmin`. Verify:
 - runtime bytecode matches OpenZeppelin `ProxyAdmin`
-- `owner()` is the expected timelock
 
 ```bash
 compare_runtime "$ETH_MAINNET_RPC_URL" 0xb4e7A08A791f7A7bcd135c628211931D57C73C2E "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
@@ -185,36 +184,10 @@ compare_runtime "$XDC_RPC_URL" 0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3 "@open
 compare_runtime "$XDC_RPC_URL" 0xC7Ffca6D884c4b447E321496af1a0bc550d315e2 "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
 ```
 
-Check owners:
-
-```bash
-cast call 0xb4e7A08A791f7A7bcd135c628211931D57C73C2E "owner()(address)" --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0xfc57516e6d2F3924DfF6f5D0c042f0c9df0d383A "owner()(address)" --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0x63eFe570352523f8a0F2E6658Dc1907598248953 "owner()(address)" --rpc-url "$XDC_RPC_URL"
-cast call 0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3 "owner()(address)" --rpc-url "$XDC_RPC_URL"
-cast call 0xC7Ffca6D884c4b447E321496af1a0bc550d315e2 "owner()(address)" --rpc-url "$XDC_RPC_URL"
-```
-
-Expected owners:
-
-```text
-0xb4e7... -> 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21
-0xfc57... -> 0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707
-0x63eF... -> 0x200940DC5cE303Af2a53e13181CBCBAc96237a74
-0x6fc2... -> 0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c
-0xC7Ff... -> 0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc
-```
-
-## 3. Verify TimelockController Contracts
+## 3. Verify TimelockController Bytecode
 
 Verify:
 - runtime bytecode matches OpenZeppelin `TimelockController`
-- `minDelay == 86400`
-- `DEFAULT_ADMIN_ROLE`, `PROPOSER_ROLE`, and `EXECUTOR_ROLE` are held by the chain’s `OFT_OWNER`
-
-Known `OFT_OWNER` values from [script/BaseData.s.sol](/home/claudeuser/source/yieldnest-state-relay/script/BaseData.s.sol):
-- Ethereum mainnet: `0xfcad670592a3b24869C0b51a6c6FDED4F95D6975`
-- XDC: `0x24D2486F5b2C2c225B6be8B4f72D46349cBf4458`
 
 Compare runtime:
 
@@ -225,30 +198,6 @@ compare_runtime "$XDC_RPC_URL" 0x200940DC5cE303Af2a53e13181CBCBAc96237a74 "@open
 compare_runtime "$XDC_RPC_URL" 0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
 compare_runtime "$XDC_RPC_URL" 0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
 ```
-
-Check delay:
-
-```bash
-cast call 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "getMinDelay()(uint256)" --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707 "getMinDelay()(uint256)" --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0x200940DC5cE303Af2a53e13181CBCBAc96237a74 "getMinDelay()(uint256)" --rpc-url "$XDC_RPC_URL"
-cast call 0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c "getMinDelay()(uint256)" --rpc-url "$XDC_RPC_URL"
-cast call 0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc "getMinDelay()(uint256)" --rpc-url "$XDC_RPC_URL"
-```
-
-Check roles:
-
-```bash
-export DEFAULT_ADMIN_ROLE=0x0000000000000000000000000000000000000000000000000000000000000000
-export PROPOSER_ROLE=$(cast keccak "PROPOSER_ROLE")
-export EXECUTOR_ROLE=$(cast keccak "EXECUTOR_ROLE")
-
-cast call 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "hasRole(bytes32,address)(bool)" "$DEFAULT_ADMIN_ROLE" 0xfcad670592a3b24869C0b51a6c6FDED4F95D6975 --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "hasRole(bytes32,address)(bool)" "$PROPOSER_ROLE" 0xfcad670592a3b24869C0b51a6c6FDED4F95D6975 --rpc-url "$ETH_MAINNET_RPC_URL"
-cast call 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "hasRole(bytes32,address)(bool)" "$EXECUTOR_ROLE" 0xfcad670592a3b24869C0b51a6c6FDED4F95D6975 --rpc-url "$ETH_MAINNET_RPC_URL"
-```
-
-Repeat the same pattern for the other timelocks.
 
 ## 4. Verify Implementation Runtime Bytecode
 
@@ -425,56 +374,21 @@ forge verify-contract \
 
 Repeat with the exact addresses listed in the broadcast artifacts for the remaining timelocks.
 
-## 7. Verify the Functional Wiring
-
-The verify scripts in this repo check the deployment wiring beyond raw bytecode:
-
-```bash
-forge script --sig "run(string,string)" \
-  --rpc-url "$ETH_MAINNET_RPC_URL" \
-  script/deploy/6_VerifyStateRelay.s.sol:VerifyStateRelay \
-  script/inputs/mainnet-xdc-ynrwax.json ""
-```
-
-```bash
-forge script --sig "run(string,string)" \
-  --rpc-url "$XDC_RPC_URL" \
-  script/deploy/6_VerifyStateRelay.s.sol:VerifyStateRelay \
-  script/inputs/mainnet-xdc-ynrwax.json ""
-```
-
-```bash
-forge script --sig "run(string,string,string)" \
-  --rpc-url "$XDC_RPC_URL" \
-  script/deploy/adapters/2_VerifyRateAdapter.s.sol:VerifyRateAdapter \
-  script/inputs/mainnet-xdc-ynrwax.json "" "mainnet-ynrwax-convertToAssets"
-```
-
-These scripts verify:
-- proxy admin and timelock ownership
-- LayerZero peer config
-- DVN / executor / delegate config
-- `StateStore` writer binding
-- adapter state store / key / bounds / staleness config
-
-They are not a substitute for bytecode verification, but they are useful as a second pass.
-
-## 8. Recommended Verification Order
+## 7. Recommended Verification Order
 
 For an independent third-party verifier, the most practical order is:
 
 1. Check out this repo revision and run `forge build`.
 2. Verify proxy runtime bytecode for all 5 proxies.
 3. Read the ERC-1967 admin and implementation slots and confirm they match the committed deployment JSON.
-4. Verify all 5 `ProxyAdmin` runtimes and confirm each `owner()` matches the committed timelock address.
-5. Verify all 5 timelock runtimes, `minDelay`, and `OFT_OWNER` roles.
+4. Verify all 5 `ProxyAdmin` runtimes.
+5. Verify all 5 timelock runtimes.
 6. Verify `StateSender`, `StateStore`, and `RateAdapterUpgradeable` implementation runtimes by direct comparison.
 7. Verify `LayerZeroSenderTransport` and `LayerZeroReceiverTransport` implementations with exact constructor arguments.
 8. Verify each proxy constructor with the exact init calldata from the committed broadcast artifacts.
-9. Run the repo’s verify scripts on both chains.
+9. Verify timelock constructor arguments with the committed broadcast artifacts.
 
 If all of those checks pass, a third party has strong evidence that:
 - the deployed bytecode matches this repo
 - the proxy topology matches the committed artifacts
-- the timelock/admin ownership is correct
-- the LayerZero route configuration is wired as intended
+- the implementation contracts behind the proxies are the ones committed in this repo
