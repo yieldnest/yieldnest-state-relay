@@ -227,7 +227,15 @@ These embed the LayerZero endpoint in deployed runtime, so direct `forge inspect
 - `LayerZeroSenderTransport`
 - `LayerZeroReceiverTransport`
 
-Use source verification with the exact constructor arguments instead.
+Use `forge verify-bytecode` with the exact constructor arguments instead.
+
+In this repo, `forge verify-bytecode` should also use the compiled contract name only:
+- `LayerZeroSenderTransport`
+- `LayerZeroReceiverTransport`
+- `TransparentUpgradeableProxy`
+- `TimelockController`
+
+Do not use `<path>:<contract>` in these commands.
 
 Known constructor args:
 - Ethereum mainnet sender transport implementation constructor:
@@ -235,27 +243,27 @@ Known constructor args:
 - XDC receiver transport implementation constructor:
   - endpoint: `0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa`
 
-Verify on explorer:
+Verify bytecode:
 
 ```bash
-forge verify-contract \
-  --chain 1 \
+forge verify-bytecode \
+  --rpc-url "$ETH_MAINNET_RPC_URL" \
   --verifier etherscan \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0x7971F0dDC51F59496FaD4e012e35DF5ee1Acd203 \
-  src/layerzero/LayerZeroSenderTransport.sol:LayerZeroSenderTransport \
-  --constructor-args $(cast abi-encode "constructor(address)" 0x1a44076050125825900e736c501f859c50fE728c)
+  LayerZeroSenderTransport \
+  --encoded-constructor-args $(cast abi-encode "constructor(address)" 0x1a44076050125825900e736c501f859c50fE728c)
 ```
 
 ```bash
-forge verify-contract \
-  --chain 50 \
+forge verify-bytecode \
+  --rpc-url "$XDC_RPC_URL" \
   --verifier etherscan \
   --verifier-url "$ETHERSCAN_VERIFIER_URL_XDC" \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0x3649638CC74F2e417563B5840dFD8A010BfE33a8 \
-  src/layerzero/LayerZeroReceiverTransport.sol:LayerZeroReceiverTransport \
-  --constructor-args $(cast abi-encode "constructor(address)" 0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa)
+  LayerZeroReceiverTransport \
+  --encoded-constructor-args $(cast abi-encode "constructor(address)" 0xcb566e3B6934Fa77258d68ea18E931fa75e1aaAa)
 ```
 
 ## 5. Verify Proxy Constructor Arguments
@@ -274,13 +282,13 @@ constructor(address _logic, address initialOwner, bytes memory _data)
 ### Mainnet `LayerZeroSenderTransport` proxy
 
 ```bash
-forge verify-contract \
-  --chain 1 \
+forge verify-bytecode \
+  --rpc-url "$ETH_MAINNET_RPC_URL" \
   --verifier etherscan \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xDABE0aae5Dc98068963a49C63fF56144DB6FBBE8 \
-  @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
+  TransparentUpgradeableProxy \
+  --encoded-constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
     0x7971F0dDC51F59496FaD4e012e35DF5ee1Acd203 \
     0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707 \
     0xc4d66de80000000000000000000000004c51ce7b2546e18449fbe16738a8d55bc195a4dd)
@@ -289,13 +297,13 @@ forge verify-contract \
 ### Mainnet `StateSender` proxy
 
 ```bash
-forge verify-contract \
-  --chain 1 \
+forge verify-bytecode \
+  --rpc-url "$ETH_MAINNET_RPC_URL" \
   --verifier etherscan \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xD2854219263BF681a8E11c41b05ae3f1a08f5D94 \
-  @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
+  TransparentUpgradeableProxy \
+  --encoded-constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
     0x7FC4e96e0D2D5918924B92bC6f960F951354B00c \
     0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 \
     0xfe2357ba000000000000000000000000fcad670592a3b24869c0b51a6c6fded4f95d6975000000000000000000000000dabe0aae5dc98068963a49c63ff56144db6fbbe800000000000000000000000001ba69727e2860b37bc1a2bd56999c1afb4c15d800000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000002407a2d13a0000000000000000000000000000000000000000000000000de0b6b3a764000000000000000000000000000000000000000000000000000000000000")
@@ -304,14 +312,14 @@ forge verify-contract \
 ### XDC `LayerZeroReceiverTransport` proxy
 
 ```bash
-forge verify-contract \
-  --chain 50 \
+forge verify-bytecode \
+  --rpc-url "$XDC_RPC_URL" \
   --verifier etherscan \
   --verifier-url "$ETHERSCAN_VERIFIER_URL_XDC" \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xa031Dfe64aD016E3475007BEb6dbE632B83CDc01 \
-  @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
+  TransparentUpgradeableProxy \
+  --encoded-constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
     0x3649638CC74F2e417563B5840dFD8A010BfE33a8 \
     0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c \
     0xc4d66de80000000000000000000000004c51ce7b2546e18449fbe16738a8d55bc195a4dd)
@@ -320,14 +328,14 @@ forge verify-contract \
 ### XDC `StateStore` proxy
 
 ```bash
-forge verify-contract \
-  --chain 50 \
+forge verify-bytecode \
+  --rpc-url "$XDC_RPC_URL" \
   --verifier etherscan \
   --verifier-url "$ETHERSCAN_VERIFIER_URL_XDC" \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xe4A68709601F0d67d2333F6fEA0b9518eA25C897 \
-  @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
+  TransparentUpgradeableProxy \
+  --encoded-constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
     0x4e077cA5dEe2d965595b73beE36856486aC18a75 \
     0x200940DC5cE303Af2a53e13181CBCBAc96237a74 \
     0x946d920400000000000000000000000024d2486f5b2c2c225b6be8b4f72d46349cbf445800000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000001000000000000000000000000a031dfe64ad016e3475007beb6dbe632b83cdc01)
@@ -336,14 +344,14 @@ forge verify-contract \
 ### XDC `RateAdapterUpgradeable` proxy
 
 ```bash
-forge verify-contract \
-  --chain 50 \
+forge verify-bytecode \
+  --rpc-url "$XDC_RPC_URL" \
   --verifier etherscan \
   --verifier-url "$ETHERSCAN_VERIFIER_URL_XDC" \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xc25e5331C8523eAb0F09166B506B865Ad3E3Bb43 \
-  @openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy \
-  --constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
+  TransparentUpgradeableProxy \
+  --encoded-constructor-args $(cast abi-encode "constructor(address,address,bytes)" \
     0x0f4398aDFa8Fc8451F262E6180Ee697bc4Ba7a90 \
     0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc \
     0xfc87348400000000000000000000000024d2486f5b2c2c225b6be8b4f72d46349cbf4458000000000000000000000000e4a68709601f0d67d2333f6fea0b9518ea25c897e4ebad80baaf4b323a39ec6d02d64b5e0bfa5a02d892aa432ce2dae72f654ef20000000000000000000000000000000000000000000000000000000000093a800000000000000000000000000000000000000000000000000000000000093a80000000000000000000000000000000000000000000000000000000000003f480000000000000000000000000000000000000000000000000000000e8d4a5100000000000000000000000000000000000000000000000000000000000000dbba000000000000000000000000000000000000000000000000000000000001e8480)
@@ -366,13 +374,13 @@ The committed deployment used:
 Example, Ethereum mainnet sender proxy-admin timelock:
 
 ```bash
-forge verify-contract \
-  --chain 1 \
+forge verify-bytecode \
+  --rpc-url "$ETH_MAINNET_RPC_URL" \
   --verifier etherscan \
   --etherscan-api-key "$ETHERSCAN_API_KEY" \
   0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 \
-  @openzeppelin/contracts/governance/TimelockController.sol:TimelockController \
-  --constructor-args $(cast abi-encode "constructor(uint256,address[],address[],address)" \
+  TimelockController \
+  --encoded-constructor-args $(cast abi-encode "constructor(uint256,address[],address[],address)" \
     86400 \
     "[0xfcad670592a3b24869C0b51a6c6FDED4F95D6975]" \
     "[0xfcad670592a3b24869C0b51a6c6FDED4F95D6975]" \
