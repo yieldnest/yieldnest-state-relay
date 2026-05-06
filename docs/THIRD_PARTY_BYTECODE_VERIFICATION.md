@@ -116,6 +116,13 @@ compare_runtime() {
 }
 ```
 
+In this repo, `forge inspect ... deployedBytecode` works reliably with the compiled contract name for shared OpenZeppelin contracts:
+- `TransparentUpgradeableProxy`
+- `ProxyAdmin`
+- `TimelockController`
+
+So the examples below intentionally use those short contract names rather than full source paths.
+
 ## 1. Verify the ERC-1967 Proxy Topology
 
 For each proxy, confirm:
@@ -126,11 +133,11 @@ For each proxy, confirm:
 Check the proxy runtime bytecode:
 
 ```bash
-compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_SENDER_PROXY" "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
-compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_TRANSPORT_PROXY" "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_STATESTORE_PROXY" "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_RECEIVER_PROXY" "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
-compare_runtime "$XDC_RPC_URL" "$XDC_RATE_ADAPTER_PROXY" "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol:TransparentUpgradeableProxy"
+compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_SENDER_PROXY" "TransparentUpgradeableProxy"
+compare_runtime "$ETH_MAINNET_RPC_URL" "$MAINNET_TRANSPORT_PROXY" "TransparentUpgradeableProxy"
+compare_runtime "$XDC_RPC_URL" "$XDC_STATESTORE_PROXY" "TransparentUpgradeableProxy"
+compare_runtime "$XDC_RPC_URL" "$XDC_RECEIVER_PROXY" "TransparentUpgradeableProxy"
+compare_runtime "$XDC_RPC_URL" "$XDC_RATE_ADAPTER_PROXY" "TransparentUpgradeableProxy"
 ```
 
 Check the admin and implementation slots:
@@ -177,11 +184,11 @@ Each TransparentUpgradeableProxy deploys a dedicated `ProxyAdmin`. Verify:
 - runtime bytecode matches OpenZeppelin `ProxyAdmin`
 
 ```bash
-compare_runtime "$ETH_MAINNET_RPC_URL" 0xb4e7A08A791f7A7bcd135c628211931D57C73C2E "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
-compare_runtime "$ETH_MAINNET_RPC_URL" 0xfc57516e6d2F3924DfF6f5D0c042f0c9df0d383A "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
-compare_runtime "$XDC_RPC_URL" 0x63eFe570352523f8a0F2E6658Dc1907598248953 "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
-compare_runtime "$XDC_RPC_URL" 0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3 "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
-compare_runtime "$XDC_RPC_URL" 0xC7Ffca6D884c4b447E321496af1a0bc550d315e2 "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol:ProxyAdmin"
+compare_runtime "$ETH_MAINNET_RPC_URL" 0xb4e7A08A791f7A7bcd135c628211931D57C73C2E "ProxyAdmin"
+compare_runtime "$ETH_MAINNET_RPC_URL" 0xfc57516e6d2F3924DfF6f5D0c042f0c9df0d383A "ProxyAdmin"
+compare_runtime "$XDC_RPC_URL" 0x63eFe570352523f8a0F2E6658Dc1907598248953 "ProxyAdmin"
+compare_runtime "$XDC_RPC_URL" 0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3 "ProxyAdmin"
+compare_runtime "$XDC_RPC_URL" 0xC7Ffca6D884c4b447E321496af1a0bc550d315e2 "ProxyAdmin"
 ```
 
 ## 3. Verify TimelockController Bytecode
@@ -192,11 +199,11 @@ Verify:
 Compare runtime:
 
 ```bash
-compare_runtime "$ETH_MAINNET_RPC_URL" 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
-compare_runtime "$ETH_MAINNET_RPC_URL" 0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707 "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
-compare_runtime "$XDC_RPC_URL" 0x200940DC5cE303Af2a53e13181CBCBAc96237a74 "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
-compare_runtime "$XDC_RPC_URL" 0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
-compare_runtime "$XDC_RPC_URL" 0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc "@openzeppelin/contracts/governance/TimelockController.sol:TimelockController"
+compare_runtime "$ETH_MAINNET_RPC_URL" 0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21 "TimelockController"
+compare_runtime "$ETH_MAINNET_RPC_URL" 0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707 "TimelockController"
+compare_runtime "$XDC_RPC_URL" 0x200940DC5cE303Af2a53e13181CBCBAc96237a74 "TimelockController"
+compare_runtime "$XDC_RPC_URL" 0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c "TimelockController"
+compare_runtime "$XDC_RPC_URL" 0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc "TimelockController"
 ```
 
 ## 4. Verify Implementation Runtime Bytecode
