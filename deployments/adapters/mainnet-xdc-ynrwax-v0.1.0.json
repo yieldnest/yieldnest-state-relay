@@ -1,0 +1,21 @@
+{
+  "chains": {
+    "50": {
+      "rateAdapters": {
+        "mainnet-ynrwax-convertToAssets": {
+          "address": "0xc25e5331C8523eAb0F09166B506B865Ad3E3Bb43",
+          "maxDstStaleness": 604800,
+          "maxSourceTimestampSkew": 259200,
+          "maxSrcStaleness": 604800,
+          "maxUpperBound": 2000000,
+          "minLowerBound": 900000,
+          "proxyAdmin": "0xC7Ffca6D884c4b447E321496af1a0bc550d315e2",
+          "proxyAdminTimelock": "0x5bA76aD2dbf0D7B53396F80328cEc5EAd3183Cfc",
+          "rateKey": "0xe4ebad80baaf4b323a39ec6d02d64b5e0bfa5a02d892aa432ce2dae72f654ef2",
+          "scalingFactor": 1000000000000,
+          "stateStore": "0xe4A68709601F0d67d2333F6fEA0b9518eA25C897"
+        }
+      }
+    }
+  }
+}
