@@ -1,0 +1,24 @@
+{
+  "chains": {
+    "1": {
+      "senders": {
+        "mainnet-ynrwax-convertToAssets": {
+          "address": "0xD2854219263BF681a8E11c41b05ae3f1a08f5D94",
+          "proxyAdmin": "0xb4e7A08A791f7A7bcd135c628211931D57C73C2E",
+          "proxyAdminTimelock": "0xA7aDbC2101F3503841Ab6FE5bDB8e480e2902D21",
+          "transport": "0xDABE0aae5Dc98068963a49C63fF56144DB6FBBE8",
+          "transportProxyAdmin": "0xfc57516e6d2F3924DfF6f5D0c042f0c9df0d383A",
+          "transportProxyAdminTimelock": "0x9CB00E129d1BBf6baB6d3bE661602Ab3f1C38707"
+        }
+      }
+    },
+    "50": {
+      "stateStore": "0xe4A68709601F0d67d2333F6fEA0b9518eA25C897",
+      "stateStoreProxyAdmin": "0x63eFe570352523f8a0F2E6658Dc1907598248953",
+      "stateStoreProxyAdminTimelock": "0x200940DC5cE303Af2a53e13181CBCBAc96237a74",
+      "stateReceiver": "0xa031Dfe64aD016E3475007BEb6dbE632B83CDc01",
+      "stateReceiverProxyAdmin": "0x6fc2023829C8C8e6b9C9e8Cb3c13bAd1545dbDc3",
+      "stateReceiverProxyAdminTimelock": "0x3656ce5F84B98fa3E0D5EdD4E47fd4771Cd80C6c"
+    }
+  }
+}
